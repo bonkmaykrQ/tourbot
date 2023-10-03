@@ -4,17 +4,22 @@
 #include <iostream>
 #include <fstream>
 #include <memory>
+#include <cmath>
+#include <iomanip>
+#include <random>
+#include <string>
+#include <sstream>
 #include <algorithm>
+#include <ctime>
+#include <ctype.h>
 #include <stdlib.h>
 #include <time.h>
-#include <ctime>
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <iomanip>
 
 #include "strutils.h"
 #include "client.h"
@@ -22,7 +27,8 @@
 #include "cmds.h"
 #include "props.h"
 
-#include <ctype.h>
+std::chrono::time_point<std::chrono::system_clock> pingStart;
+std::chrono::time_point<std::chrono::system_clock> pingEnd;
 
 static char* toLower(char* str) {
 	for(int i = 0; str[i]; i++){
@@ -51,8 +57,18 @@ static char* trim(char *str) {
 }
 
 int main(int argc, char const* argv[]) {
-	srand (time(NULL));
 	// Setting config values.
+	loadConfig();
+	autoInit();
+	while (autoOnline) {
+		while (!roomOnline) {}
+		sleep(1);
+	}
+	return deinit(0);
+}
+
+void loadConfig() {
+	conf = new PengoConfig();
 	login_username = (conf.getValue("username", ""));
 	login_password = (conf.getValue("password", ""));
 	room = (conf.getValue("room", "GroundZero#Reception<dimension-1>"));
@@ -64,12 +80,6 @@ int main(int argc, char const* argv[]) {
 	spin = conf.getInt("spin", 45);
 	keepAliveTime = conf.getInt("katime", 15);
 	debug = conf.getInt("debug", 0) == 1;
-	autoInit();
-	while (autoOnline) {
-		while (!roomOnline) {}
-		sleep(1);
-	}
-	return deinit(0);
 }
 
 int deinit(int response) {
@@ -142,7 +152,7 @@ void autoRandMessage() {
 	int maxTime = conf.getInt("maxRandomMsgTime", 0);
 	int wait = 0;
 	sleep(2);
-	sendChatMessage(&roomsock, conf.getMessage("greet"));
+	sendChatMessage(&roomsock, conf.getMessage("startup"));
 	if (minTime != 0) {
 		while (roomOnline) {
 			if (wait != 0) {
@@ -150,7 +160,8 @@ void autoRandMessage() {
 				if (debug) printf("debug: automsg: \"%s\"\n", newMsg.c_str());
 				sendChatMessage(&roomsock, newMsg);
 			}
-			wait = rand() % minTime + maxTime;
+			std::uniform_int_distribution<int> rno(minTime,maxTime);
+			wait = rno(rng);
 			if (debug) printf("debug: waiting %i seconds for next message.\n", wait);
 			sleep(wait);
 		}
@@ -175,16 +186,15 @@ void reciever(int *sock, uint16_t port) {
 			offs++; // Ignore empty byte
 			int username_len = bufin[offs++];
 			memcpy(username, &bufin[offs], username_len);
-			username[username_len+1] = 0;
+			username[username_len] = 0;
 			offs+=username_len;
 			int message_len = bufin[offs++];
 			memcpy(message, &bufin[offs++], message_len);
-			message[message_len+1] = 0;
-			printf("info: received message from %s: \"%s\"\n", username, message);
-			processText(sock, username, message);
+			message[message_len] = 0;
+			processText(sock, std::string(username), std::string(message));
 		} else if (bufin[p+2] == CMD_WHISPER && bufin[p+1] == 0x01) {
 			char *username = new char[32];
-			char *message;
+			char *message = new char[250];
 			int offs = p+3;
 			offs++; // Ignore empty byte
 			int username_len = bufin[offs++];
@@ -195,8 +205,7 @@ void reciever(int *sock, uint16_t port) {
 			int message_len = bufin[offs++];
 			memcpy(message, &bufin[offs++], message_len);
 			message[message_len] = 0;
-			printf("info: received whisper from %s: \"%s\"\n", username, message);
-			processWhisper(sock, username, message);
+			processWhisper(sock, std::string(username), std::string(message));
 		} else if (bufin[p+2] == CMD_REGOBJID && bufin[p+1] == 0xff) {
 			char *longID = new char[32];
 			int shortID;
@@ -476,11 +485,11 @@ bool strcontains(std::string needle, std::string haystack) {
 	return found;
 }
 
-bool vstrcontains(std::string needle, std::vector<std::string> haystack) {
+int vstrcontains(std::string needle, std::vector<std::string> haystack) {
 	for (std::string str : haystack) {
-		if (needle.rfind(str, 0) == 0) return true;
+		if (needle.rfind(str, 0) == 0) return str.length();
 	}
-	return false;
+	return 0;
 }
 
 std::string getContainedWorld(std::map<std::string, std::string> worldlist, std::string input) {
@@ -490,32 +499,51 @@ std::string getContainedWorld(std::map<std::string, std::string> worldlist, std:
 	return "";
 }
 
+std::string getResponse(std::map<std::string, std::string> responselist, std::string input) {
+	for (auto resp : responselist) {
+		if (strcontains(resp.first, input)) return resp.second;
+	}
+	return "";
+}
+
 char* handleCommand(std::string from, std::string message) {
 	char *msgout = new char[255];
-	if (strcontains("flip a coin", message)) {
+	
+	if (strcontains("hi", message)) {
+		snprintf(msgout, 255, conf.getMessage("greet").c_str(), from.c_str());
+	} else if (strcontains("flip a coin", message)) {
 		
-		bool heads = rand() % 10 > 5;
+		std::uniform_int_distribution<int> rno(0,1);
+		bool heads = rno(rng) == 1;
 		snprintf(msgout, 255, "%s", heads?"Heads":"Tails");
 		
 	} else if (strcontains("time", message)) {
 		
-		time_t currentTime;
-		struct tm *localTime;
-		time( &currentTime );
-		localTime = localtime( &currentTime );
-		snprintf(msgout, 255, "The time is %02i:%02i.", localTime->tm_hour, localTime->tm_min, localTime->tm_sec);
+		std::ostringstream nowStream;
+		auto now = std::chrono::system_clock::now();
+		std::time_t nowTime = std::chrono::system_clock::to_time_t(now);
+		nowStream << std::put_time(localtime(&nowTime), "%A %b %d, %Y at %I:%M %p %Z");
+		std::string curTime = nowStream.str();
 		
-	} else if (strcontains("dice", message) || strcontains("roll", message)) {
+		snprintf(msgout, 255, "It is %s.", curTime.c_str());
 		
-		int dice = 6;
+	} else if (strcontains("roll", message)) {
 		
-		if (strcontains("d10", message)) dice = 10;
-		else if (strcontains("d12", message)) dice = 12;
-		else if (strcontains("d20", message)) dice = 20;
-		else if (strcontains("d100", message)) dice = 100;
+		int dice = 6; int dstr;
+		try {
+			if ((dstr = message.find(" d")) != std::string::npos) {
+				std::string dino = message.substr(dstr+2, message.length());
+				if (debug) printf("debug: setting die to d%s\n", dino.c_str());
+				dice = std::stoi(dino);
+			}
+		} catch (const std::out_of_range& e) { 
+			dice = 6;
+		}
 		
-		int roll = (rand() % (dice-1)) + 1;
-		snprintf(msgout, 255, "%s rolled a %i.", from.c_str(), dice);
+		
+		std::uniform_int_distribution<int> rno(1,dice);
+		int roll = rno(rng);
+		snprintf(msgout, 255, "%s rolled a %i.", from.c_str(), roll);
 		
 	} else if (strcontains("where is", message) || strcontains("where", message) || strcontains("mark to", message) || strcontains("show me", message)) {
 		
@@ -538,19 +566,36 @@ char* handleCommand(std::string from, std::string message) {
 		
 		exit(deinit(0));
 		
+	} else if (strcontains("reload", message) && from == conf.getValue("owner", "")) {
+		
+		loadConfig();
+		snprintf(msgout, 255, "My configurations have been reloaded.");
+		
+	} else {
+		
+		std::string response;
+		if ((response = getResponse(conf.getResponses(), message)).length() > 0) {
+			snprintf(msgout, 255, "%s", response.c_str());
+		}
+		
 	}
+	
 	return msgout;
 }
 
 void processText(int *sock, std::string username, std::string message) {
+	printf("info: received text from %s: \"%s\"\n", username.c_str(), message.c_str());
 	char *msgout = new char[255];
-	message = toLower(message); // Make it a lowercase string so we can work with it.
-	// Someone has requested P3NG0s attention.
-	// We'll accept some variations.
-	if (username != login_username) {
-		if (vstrcontains(message, conf.getMessages("attention"))) {
+	if (username.compare(login_username) != 0) {
+		message = toLower(message); // Make it a lowercase string so we can work with it.
+		int alen = 0;
+		// Someone has requested P3NG0s attention.
+		// We'll accept some variations.
+		if ((alen = vstrcontains(message, conf.getMessages("attention"))) > 0) {
+			// Strip out the attention. We got it.
+			message = message.substr(alen+1, message.length());
 			msgout = handleCommand(username, message);
-			if (strlen(msgout) > 0) sendChatMessage(sock, msgout);
+			if (strlen(msgout) > 1) sendChatMessage(sock, std::string(msgout));
 			else if (strcontains("your commands", message) || strcontains("can you do", message)) {
 
 				char *whisout = new char[255];
@@ -559,14 +604,29 @@ void processText(int *sock, std::string username, std::string message) {
 				snprintf(msgout, 255, "You have been whispered with a link that will help you.");
 				sendChatMessage(sock, msgout);
 
+			} else if (strcontains("test ping", message)) {
+
+				pingStart = std::chrono::system_clock::now();
+				snprintf(msgout, 255, "Ping!");
+				sendChatMessage(sock, msgout);
+
 			}
 		} else if (message == "ping") { // We'll accept a simple ping to pong.
 			sendChatMessage(sock, "Pong!");
+		}
+	} else {
+		if (debug) printf("debug: processing own message: %s\n", message.c_str());
+		if (message.compare("Ping!") == 0) {
+			pingEnd = std::chrono::system_clock::now();
+			std::chrono::duration<double, std::milli> ping = pingEnd - pingStart;
+			snprintf(msgout, 255, "Response received in %ims.", ping.count());
+			sendChatMessage(sock, msgout);
 		}
 	}
 }
 
 void processWhisper(int *sock, std::string username, std::string message) {
+	printf("info: received whisper from %s: \"%s\"\n", username.c_str(), message.c_str());
 	char *msgout = new char[255];
 	message = toLower(message);
 	
@@ -579,37 +639,37 @@ void processWhisper(int *sock, std::string username, std::string message) {
 }
 
 void sendChatMessage(int *sock, std::string msg) {
-	unsigned char bufout[BUFFERSIZE] = {0};
+	unsigned char msgout[255] = {0};
 	int msglen = msg.length();
 	int k = 1;
-	bufout[k++] = 1;
-	bufout[k++] = CMD_CHATMSG;
-	bufout[k++] = 0; bufout[k++] = 0;
-	bufout[k++] = msglen;
+	msgout[k++] = 1;
+	msgout[k++] = CMD_CHATMSG;
+	msgout[k++] = 0; bufout[k++] = 0;
+	msgout[k++] = msglen;
 	for(int l = 0; l < msglen; l++)
-		bufout[k++] = msg[l];
-	bufout[k] = 0;
-	bufout[0] = k;
-	wsend(&roomsock, bufout, 0);
+		msgout[k++] = msg[l];
+	msgout[k] = 0;
+	msgout[0] = k;
+	wsend(&roomsock, msgout, 0);
 }
 
 void sendWhisperMessage(int *sock, std::string to, std::string msg) {
 	whisper_repeat:
-	unsigned char bufout[BUFFERSIZE] = {0};
+	unsigned char msgout[255] = {0};
 	int k = 1;
-	bufout[k++] = 0;
-	bufout[k++] = to.length();
+	msgout[k++] = 0;
+	msgout[k++] = to.length();
 	for(int l = 0; l < to.length(); l++)
-		bufout[k++] = to[l];
-	bufout[k++] = CMD_WHISPER;
-	bufout[k++] = 0; bufout[k++] = 0;
+		msgout[k++] = to[l];
+	msgout[k++] = CMD_WHISPER;
+	msgout[k++] = 0; bufout[k++] = 0;
 	int msglen = std::min((int)msg.length(), 226);
-	bufout[k++] = msglen;
+	msgout[k++] = msglen;
 	for(int l = 0; l < msglen; l++)
-		bufout[k++] = msg[l];
-	bufout[k] = 0;
-	bufout[0] = k;
-	wsend(&roomsock, bufout, 0);
+		msgout[k++] = msg[l];
+	msgout[k] = 0;
+	msgout[0] = k;
+	wsend(&roomsock, msgout, 0);
 	// Check if the length is higher.
 	if (msg.length() > 226) {
 		msg = msg.substr(226, -1);

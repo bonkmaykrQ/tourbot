@@ -49,6 +49,19 @@ public:
 				}
 			}
 		}
+		
+		if ((conf["responsefile"]).length() > 0) {
+			std::ifstream rspn(conf["responsefile"]);
+			std::string rline;
+			while (std::getline(rspn, rline)) {
+				if (rline.rfind("#", 0) != 0) {
+					std::string name = rline.substr(0, rline.find("="));
+					std::string value = rline.substr(rline.find("=")+1, rline.length());
+					std::cout << name << ": \"" << value << "\"" << std::endl;
+					responses[name] = value;
+				}
+			}
+		}
 	}
 	PengoConfig operator = (PengoConfig *pc) { return *pc; };
 	
@@ -86,9 +99,18 @@ public:
 		return worlds;
 	}
 	
+	std::string getReply(std::string name) {
+		return responses[name];
+	}
+	
+	std::map<std::string, std::string> getResponses() {
+		return responses;
+	}
+	
 private:
 	std::map<std::string, std::string> conf;
 	std::map<std::string, std::string> worlds;
+	std::map<std::string, std::string> responses;
 	std::map<std::string, std::vector<std::string>> messages;
 };
 

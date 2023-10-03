@@ -6,6 +6,8 @@
 #include "config.h"
 PengoConfig conf;
 bool debug = false;
+std::random_device rd;
+std::mt19937 rng(rd());
 
 #define BUFFERSIZE 65535
 
@@ -53,6 +55,7 @@ std::map<char, Drone> objects;
 static char* toLower(char* str);
 static std::string toLower(std::string str);
 static char* trim(char *str);
+void loadConfig();
 int deinit(int response);
 void autoInit();
 void roomInit();
@@ -70,8 +73,9 @@ void teleport(int *sock, int x, int y, int z, int rot);
 void userEnter(char id);
 void userExit(char id);
 bool strcontains(std::string needle, std::string haystack);
-bool vstrcontains(std::string needle, std::vector<std::string> haystack);
+int vstrcontains(std::string needle, std::vector<std::string> haystack);
 std::string getContainedWorld(std::map<std::string, std::string> worldlist, std::string input);
+std::string getResponse(std::map<std::string, std::string> responselist, std::string input);
 char* handleCommand(std::string from, std::string message);
 void processText(int *sock, std::string username, std::string message);
 void processWhisper(int *sock, std::string username, std::string message);
