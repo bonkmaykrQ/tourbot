@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.5)
+project(pengobot)
+SET(CMAKE_CXX_STANDARD 17)
+SET(CMAKE_CXX_STANDARD_REQUIRED True)
+SET(CMAKE_CXX_FLAGS "-O3")
+add_subdirectory(src)
+install(TARGETS pengobot RUNTIME DESTINATION bin)

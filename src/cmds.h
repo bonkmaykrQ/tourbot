@@ -1,0 +1,34 @@
+#ifndef H_CMDS
+#define H_CMDS
+
+#define CMD_LONGLOC 1
+#define CMD_STATE 2
+#define CMD_PROP 3
+#define CMD_SHORTLOC 4
+#define CMD_ROOMCHANGE 5
+#define CMD_SESSINIT 6
+#define CMD_SESSEXIT 7
+#define CMD_APPINIT 9
+#define CMD_PROPREQ 10
+#define CMD_ACTOR_DISAPPR 11
+#define CMD_ACTOR_APPR 12
+#define CMD_REGOBJID 13
+#define CMD_CHATMSG 14
+#define CMD_PROPSET 15
+#define CMD_PROPUPD 16
+#define CMD_WHISPER 17
+#define CMD_TELEPORT 18
+#define CMD_ROOMIDREQ 20
+#define CMD_ROOMID 21
+#define CMD_SUBSCRIBE 22
+#define CMD_UNSUBSCRIBE 23
+#define CMD_SUBDIST 24
+#define CMD_REDIRECT 25
+#define CMD_REDIRID 26
+#define CMD_FINGREQ 27
+#define CMD_FINGREP 28
+#define CMD_BUDDYUPD 29
+#define CMD_BUDDYNTF 30 
+#define CMD_CHANNEL 31
+
+#endif
