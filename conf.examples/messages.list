@@ -1,0 +1,39 @@
+[startup]
+Hi, I'm P3NG0, your friendly Worlds bot.
+My initialization is complete.
+[attention]
+hey pengo
+hey p3ng0
+p3ng0
+yo pengo
+yo p3ng0
+hello p3ng0
+aloha p3ng0
+[greets]
+Hi.
+Hi %s.
+Aloha %s.
+Nice to meet you %s.
+Hope all is well!
+Howdy!
+Salutations %s.
+Acknowledged.
+Added '%s' to database.
+[goodbye]
+Goodbye!
+[unknown]
+Sorry, I don't know what you're asking.
+I am unsure of your request.
+ERROR: DIVISION BY ZERO
+Need something?
+[random]
+Beep boop!
+[jokes]
+Why did the chicken cross the road? To escape my deadly lasers, of course!
+[world]
+It's right here: %s
+%s
+Here is your mark: %s
+[whoami]
+Hi, I'm P3NG0. I'm a friendly bot.
+I am here to annihilate the human race.

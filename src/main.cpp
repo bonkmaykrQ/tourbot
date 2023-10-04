@@ -23,7 +23,7 @@
 
 #include "strutils.h"
 #include "client.h"
-#include "verrors.h.h"
+#include "verrors.h"
 #include "cmds.h"
 #include "props.h"
 
@@ -58,7 +58,14 @@ static char* trim(char *str) {
 
 int main(int argc, char const* argv[]) {
 	// Setting config values.
+	if (argc > 1) {
+		confFile = std::string(argv[1]);
+		printf("info: primary conf file set to \"%s\"\n", confFile.c_str());
+	}
 	loadConfig();
+	/*for (auto const& c : mainConf->get()) {
+		printf("info: (%s),(%s)\n", c.first.c_str(), c.second.c_str());
+	}*/
 	autoInit();
 	while (autoOnline) {
 		while (!roomOnline) {}
@@ -68,22 +75,25 @@ int main(int argc, char const* argv[]) {
 }
 
 void loadConfig() {
-	conf = new PengoConfig();
-	login_username = (conf.getValue("username", ""));
-	login_password = (conf.getValue("password", ""));
-	room = (conf.getValue("room", "GroundZero#Reception<dimension-1>"));
-	avatar = (conf.getValue("avatar", "avatar:pengo.mov"));
-	xPos = conf.getInt("xpos", 0);
-	yPos = conf.getInt("ypos", 0);
-	zPos = conf.getInt("zpos", 0);
-	direction = conf.getInt("direction", 0);
-	spin = conf.getInt("spin", 45);
-	keepAliveTime = conf.getInt("katime", 15);
-	debug = conf.getInt("debug", 0) == 1;
+	mainConf = new ACFile(confFile.c_str());
+	worldlist = new ACFile(mainConf->getValue("worldfile", "conf/worldlist.conf").c_str());
+	replylist = new ACFile(mainConf->getValue("replyfile", "conf/replies.conf").c_str());
+	messages = new AMFile(mainConf->getValue("messages", "conf/messages.list").c_str());
+	login_username = mainConf->getValue("username", "");
+	login_password = mainConf->getValue("password", "");
+	room = mainConf->getValue("room", "GroundZero#Reception<dimension-1>");
+	avatar = mainConf->getValue("avatar", "avatar:pengo.mov");
+	xPos = mainConf->getInt("xpos", 0);
+	yPos = mainConf->getInt("ypos", 0);
+	zPos = mainConf->getInt("zpos", 0);
+	direction = mainConf->getInt("direction", 0);
+	spin = mainConf->getInt("spin", 0);
+	keepAliveTime = mainConf->getInt("katime", 15);
+	debug = mainConf->getInt("debug", 0) == 1;
 }
 
 int deinit(int response) {
-	sendChatMessage(&roomsock, conf.getMessage("goodbye"));
+	sendChatMessage(&roomsock, messages->getMessage("goodbye"));
 	if (roomOnline) sessExit(&roomsock);
 	roomOnline = false;
 	if (autoOnline) sessExit(&autosock);
@@ -148,15 +158,15 @@ void roomKeepAlive() {
 }
 
 void autoRandMessage() {
-	int minTime = conf.getInt("minRandomMsgTime", 0);
-	int maxTime = conf.getInt("maxRandomMsgTime", 0);
+	int minTime = mainConf->getInt("minRandomMsgTime", 0);
+	int maxTime = mainConf->getInt("maxRandomMsgTime", 0);
 	int wait = 0;
 	sleep(2);
-	sendChatMessage(&roomsock, conf.getMessage("startup"));
+	sendChatMessage(&roomsock, messages->getMessage("startup"));
 	if (minTime != 0) {
 		while (roomOnline) {
 			if (wait != 0) {
-				std::string newMsg = conf.getMessage("random");
+				std::string newMsg = messages->getMessage("random");
 				if (debug) printf("debug: automsg: \"%s\"\n", newMsg.c_str());
 				sendChatMessage(&roomsock, newMsg);
 			}
@@ -509,13 +519,11 @@ std::string getResponse(std::map<std::string, std::string> responselist, std::st
 char* handleCommand(std::string from, std::string message) {
 	char *msgout = new char[255];
 	
-	if (strcontains("hi", message)) {
-		snprintf(msgout, 255, conf.getMessage("greet").c_str(), from.c_str());
-	} else if (strcontains("flip a coin", message)) {
+	if (strcontains("flip a coin", message)) {
 		
 		std::uniform_int_distribution<int> rno(0,1);
 		bool heads = rno(rng) == 1;
-		snprintf(msgout, 255, "%s", heads?"Heads":"Tails");
+		snprintf(msgout, 255, mainConf->getValue("coinflip_msg", "%s flipped %s.").c_str(), heads?"heads":"tails");
 		
 	} else if (strcontains("time", message)) {
 		
@@ -525,7 +533,7 @@ char* handleCommand(std::string from, std::string message) {
 		nowStream << std::put_time(localtime(&nowTime), "%A %b %d, %Y at %I:%M %p %Z");
 		std::string curTime = nowStream.str();
 		
-		snprintf(msgout, 255, "It is %s.", curTime.c_str());
+		snprintf(msgout, 255, mainConf->getValue("time_msg", "It is %s.").c_str(), curTime.c_str());
 		
 	} else if (strcontains("roll", message)) {
 		
@@ -540,42 +548,50 @@ char* handleCommand(std::string from, std::string message) {
 			dice = 6;
 		}
 		
-		
 		std::uniform_int_distribution<int> rno(1,dice);
 		int roll = rno(rng);
-		snprintf(msgout, 255, "%s rolled a %i.", from.c_str(), roll);
+		snprintf(msgout, 255, mainConf->getValue("roll_msg", "%s rolled a %i.").c_str(), from.c_str(), roll);
 		
 	} else if (strcontains("where is", message) || strcontains("where", message) || strcontains("mark to", message) || strcontains("show me", message)) {
 		
-		std::string mark = getContainedWorld(conf.getWorlds(), message);
+		std::string mark = getContainedWorld(worldlist->get(), message);
 		if (mark.length() > 0) {
-			snprintf(msgout, 255, conf.getMessage("whereis").c_str(), mark.c_str());
+			snprintf(msgout, 255, messages->getMessage("world").c_str(), mark.c_str());
 		} else {
-			snprintf(msgout, 255, "Sorry! Not a clue.");
+			snprintf(msgout, 255, mainConf->getValue("world_not_found_msg", "Sorry, I don't know that one.").c_str());
 		}
 		
-	} else if (strcontains("many users", message) || strcontains("whos online", message) || strcontains("who is online", message) || strcontains("many online", message)) {
+	} else if (((strcontains("many", message) || strcontains("count", message)) && (strcontains("users", message) || strcontains("people", message))) || (strcontains("online", message) && (strcontains("who", message) || strcontains("how many", message) || strcontains("who is", message)))) {
 		
-		snprintf(msgout, 255, "There are %i users in this room.", objects.size());
+		snprintf(msgout, 255, mainConf->getValue("roomusers_msg", "There are %i users in this room.").c_str(), objects.size());
+		
+	} else if ((strcontains("joke", message) && strcontains("tell", message)) || (strcontains("make", message) && strcontains("laugh", message))) {
+		
+		snprintf(msgout, 255, messages->getMessage("jokes").c_str());
 		
 	} else if ((strcontains("what", message) || strcontains("who", message)) && strcontains("are you", message)) {
 		
-		snprintf(msgout, 255, "%s", conf.getMessage("whoami").c_str());
+		snprintf(msgout, 255, messages->getMessage("whoami").c_str());
 		
-	} else if (strcontains("shutdown", message) && from == conf.getValue("owner", "")) {
+	} else if (strcontains("shutdown", message) && from == mainConf->getValue("owner", "")) {
 		
 		exit(deinit(0));
 		
-	} else if (strcontains("reload", message) && from == conf.getValue("owner", "")) {
+	} else if (strcontains("reload", message) && from == mainConf->getValue("owner", "")) {
 		
 		loadConfig();
-		snprintf(msgout, 255, "My configurations have been reloaded.");
+		snprintf(msgout, 255, mainConf->getValue("conf_reload_msg", "My configurations have been reloaded.").c_str());
+		
+	} else if (strcontains(" hi", message) || strcontains("hello", message) || strcontains(" hey", message) || strcontains(" yo", message)) {
+		// Prefix small ones with spaces so they don't get mixed up easily in other words. "this" -> hi, "you" -> yo, "they" -> hey
+		
+		snprintf(msgout, 255, messages->getMessage("greets").c_str(), from.c_str());
 		
 	} else {
 		
 		std::string response;
-		if ((response = getResponse(conf.getResponses(), message)).length() > 0) {
-			snprintf(msgout, 255, "%s", response.c_str());
+		if ((response = getResponse(replylist->get(), message)).length() > 0) {
+			snprintf(msgout, 255, response.c_str());
 		}
 		
 	}
@@ -591,7 +607,7 @@ void processText(int *sock, std::string username, std::string message) {
 		int alen = 0;
 		// Someone has requested P3NG0s attention.
 		// We'll accept some variations.
-		if ((alen = vstrcontains(message, conf.getMessages("attention"))) > 0) {
+		if ((alen = vstrcontains(message, messages->getMessages("attention"))) > 0) {
 			// Strip out the attention. We got it.
 			message = message.substr(alen+1, message.length());
 			msgout = handleCommand(username, message);
@@ -599,12 +615,12 @@ void processText(int *sock, std::string username, std::string message) {
 			else if (strcontains("your commands", message) || strcontains("can you do", message)) {
 
 				char *whisout = new char[255];
-				snprintf(whisout, 255, "Check this out: %s", conf.getValue("help_url", "").c_str());
+				snprintf(whisout, 255, mainConf->getValue("help_msg", "You can find more information here: %s").c_str(), mainConf->getValue("help_url", "").c_str());
 				sendWhisperMessage(&roomsock, username, whisout);
-				snprintf(msgout, 255, "You have been whispered with a link that will help you.");
+				snprintf(msgout, 255, mainConf->getValue("help_whisper_message", "%s, you have been whispered with more information.").c_str(), username.c_str());
 				sendChatMessage(sock, msgout);
 
-			} else if (strcontains("test ping", message)) {
+			} else if (strcontains("ping test", message)) {
 
 				pingStart = std::chrono::system_clock::now();
 				snprintf(msgout, 255, "Ping!");
@@ -612,14 +628,14 @@ void processText(int *sock, std::string username, std::string message) {
 
 			}
 		} else if (message == "ping") { // We'll accept a simple ping to pong.
-			sendChatMessage(sock, "Pong!");
+			sendChatMessage(sock, mainConf->getValue("pong_msg", "Pong!"));
 		}
 	} else {
 		if (debug) printf("debug: processing own message: %s\n", message.c_str());
 		if (message.compare("Ping!") == 0) {
 			pingEnd = std::chrono::system_clock::now();
 			std::chrono::duration<double, std::milli> ping = pingEnd - pingStart;
-			snprintf(msgout, 255, "Response received in %ims.", ping.count());
+			snprintf(msgout, 255, mainConf->getValue("ping_msg", "Response recieved in %ims.").c_str(), ping.count());
 			sendChatMessage(sock, msgout);
 		}
 	}
@@ -631,49 +647,57 @@ void processWhisper(int *sock, std::string username, std::string message) {
 	message = toLower(message);
 	
 	if (message == "ping") {
-		sendWhisperMessage(sock, username, "Pong");
+		sendWhisperMessage(sock, username, mainConf->getValue("pong_msg", "Pong!"));
 	} else {
 		msgout = handleCommand(username, message);
 		if (strlen(msgout) > 0) sendWhisperMessage(sock, username, msgout);
+		else {
+			snprintf(msgout, 255, messages->getMessage("unknown").c_str());
+			sendWhisperMessage(sock, username, msgout);
+		}
 	}
 }
 
 void sendChatMessage(int *sock, std::string msg) {
-	unsigned char msgout[255] = {0};
-	int msglen = msg.length();
-	int k = 1;
-	msgout[k++] = 1;
-	msgout[k++] = CMD_CHATMSG;
-	msgout[k++] = 0; bufout[k++] = 0;
-	msgout[k++] = msglen;
-	for(int l = 0; l < msglen; l++)
-		msgout[k++] = msg[l];
-	msgout[k] = 0;
-	msgout[0] = k;
-	wsend(&roomsock, msgout, 0);
+	if (msg.length() > 0) {
+		unsigned char msgout[255] = {0};
+		int msglen = msg.length();
+		int k = 1;
+		msgout[k++] = 1;
+		msgout[k++] = CMD_CHATMSG;
+		msgout[k++] = 0; bufout[k++] = 0;
+		msgout[k++] = msglen;
+		for(int l = 0; l < msglen; l++)
+			msgout[k++] = msg[l];
+		msgout[k] = 0;
+		msgout[0] = k;
+		wsend(&roomsock, msgout, 0);
+	}
 }
 
 void sendWhisperMessage(int *sock, std::string to, std::string msg) {
-	whisper_repeat:
-	unsigned char msgout[255] = {0};
-	int k = 1;
-	msgout[k++] = 0;
-	msgout[k++] = to.length();
-	for(int l = 0; l < to.length(); l++)
-		msgout[k++] = to[l];
-	msgout[k++] = CMD_WHISPER;
-	msgout[k++] = 0; bufout[k++] = 0;
-	int msglen = std::min((int)msg.length(), 226);
-	msgout[k++] = msglen;
-	for(int l = 0; l < msglen; l++)
-		msgout[k++] = msg[l];
-	msgout[k] = 0;
-	msgout[0] = k;
-	wsend(&roomsock, msgout, 0);
-	// Check if the length is higher.
-	if (msg.length() > 226) {
-		msg = msg.substr(226, -1);
-		goto whisper_repeat;
+	if (msg.length() > 0 && to.length() > 0) {
+		whisper_repeat:
+		unsigned char msgout[255] = {0};
+		int k = 1;
+		msgout[k++] = 0;
+		msgout[k++] = to.length();
+		for(int l = 0; l < to.length(); l++)
+			msgout[k++] = to[l];
+		msgout[k++] = CMD_WHISPER;
+		msgout[k++] = 0; bufout[k++] = 0;
+		int msglen = std::min((int)msg.length(), 226);
+		msgout[k++] = msglen;
+		for(int l = 0; l < msglen; l++)
+			msgout[k++] = msg[l];
+		msgout[k] = 0;
+		msgout[0] = k;
+		wsend(&roomsock, msgout, 0);
+		// Check if the length is higher.
+		if (msg.length() > 226) {
+			msg = msg.substr(226, -1);
+			goto whisper_repeat;
+		}
 	}
 }
 
