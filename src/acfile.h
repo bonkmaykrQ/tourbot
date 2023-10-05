@@ -24,7 +24,6 @@ public:
 			if (line.rfind("#", 0) != 0) {
 				std::string name = line.substr(0, line.find("="));
 				std::string value = line.substr(line.find("=")+1, line.length());
-				std::cout << name << ": \"" << value << "\"" << std::endl;
 				conf[name] = value;
 			}
 		}
@@ -90,7 +89,6 @@ public:
 					line = line.substr(1, line.length());
 				} // For \[text] messages.
 				messages[group].push_back(line);
-				std::cout << "[" << group << "]=" << line << std::endl;
 			}
 		}
 	}

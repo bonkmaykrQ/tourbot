@@ -60,9 +60,6 @@ uint16_t spin = 0;
 std::map<char, char*> properties;
 std::map<char, Drone> objects;
 
-static char* toLower(char* str);
-static std::string toLower(std::string str);
-static char* trim(char *str);
 void loadConfig();
 int deinit(int response);
 void autoInit();
@@ -78,17 +75,15 @@ std::map<char, char*> readOldPropertyList(unsigned char* in);
 void setAvatar(int *sock, std::string avstr);
 void roomIDReq(int *sock, std::string room);
 void teleport(int *sock, int x, int y, int z, int rot);
+void longloc(int *sock, int x, int y, int z, int rot);
 void userEnter(char id);
 void userExit(char id);
-bool strcontains(std::string needle, std::string haystack);
-int vstrcontains(std::string needle, std::vector<std::string> haystack);
-std::string getContainedWorld(std::map<std::string, std::string> worldlist, std::string input);
-std::string getResponse(std::map<std::string, std::string> responselist, std::string input);
-char* handleCommand(std::string from, std::string message);
+bool handleCommand(char* buffer, std::string from, std::string message);
+bool handlePhrase(char* buffer, std::string from, std::string message);
 void processText(int *sock, std::string username, std::string message);
 void processWhisper(int *sock, std::string username, std::string message);
 void sendChatMessage(int *sock, std::string msg);
 void sendWhisperMessage(int *sock, std::string to, std::string msg);
-int wsend(int *sock, unsigned char str[], int flags);
+void qsend(int *sock, unsigned char str[], bool queue);
 
 #endif
