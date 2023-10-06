@@ -21,6 +21,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#define CURL_STATICLIB
+#include <curl/curl.h>
+
 #include "client.h"
 #include "verrors.h"
 #include "cmds.h"
@@ -33,11 +36,11 @@ public:
 	QueuedPacket() {};
 	QueuedPacket(const QueuedPacket &other) {
 		this->sock = other.sock;
-		memcpy(this->buf, other.buf, 255);
+		memcpy(this->buf, other.buf, other.buf[0]);
 	}
 	QueuedPacket(int *sock, unsigned char str[]) {
 		this->sock = *sock;
-		memcpy(this->buf, str, 255);
+		memcpy(this->buf, str, str[0]);
 	};
 	
 	int flush(int flags) {
@@ -82,6 +85,7 @@ void loadConfig() {
 	worldlist = new ACFile(mainConf->getValue("worldfile", "conf/worldlist.conf").c_str());
 	replylist = new ACFile(mainConf->getValue("replyfile", "conf/replies.conf").c_str());
 	messages = new AMFile(mainConf->getValue("messages", "conf/messages.list").c_str());
+	filth = new ALFile(mainConf->getValue("filthlist", "conf/filth.list").c_str());
 	login_username = mainConf->getValue("username", "");
 	login_password = mainConf->getValue("password", "");
 	room = mainConf->getValue("room", "GroundZero#Reception<dimension-1>");
@@ -520,14 +524,16 @@ bool handleCommand(char* buffer, std::string from, std::string message) {
 	if (args.size() > 0) {
 		if (args[0] == "roll" && args.size() > 1) {
 			int dice = 1; int sides = 6; int roll = 0;
-			if (args.size() > 1) {
+			int darg = 1;
+			if (args[1] == "a") darg = 2;
+			if (args.size() > darg) {
 				try {
-					int dinx = args[1].find("d");
+					int dinx = args[darg].find("d");
 					if (dinx > 0) {
-						dice = std::stoi(args[1].substr(0, dinx));
+						dice = std::stoi(args[darg].substr(0, dinx));
 					}
-					sides = std::stoi(args[1].substr(dinx+1, args[1].length()));
-				} catch (const std::out_of_range& e) { }
+					sides = std::stoi(args[darg].substr(dinx+1, args[darg].length()));
+				} catch (...) { }
 			}
 
 			std::uniform_int_distribution<int> rno(1,sides);
@@ -600,14 +606,6 @@ bool handlePhrase(char* buffer, std::string from, std::string message) {
 		sprintf(buffer, messages->getMessage("greets").c_str(), from.c_str());
 		return true;
 		
-	} else {
-		
-		std::string response;
-		if ((response = getValueOfIncludedName(replylist->get(), message)).length() > 0) {
-			sprintf(buffer, response.c_str());
-		}
-		return true;
-		
 	}
 	return false;
 }
@@ -616,22 +614,53 @@ void processText(int *sock, std::string username, std::string message) {
 	if (debug) printf("debug: received text from %s: \"%s\"\n", username.c_str(), message.c_str());
 	char *msgout = new char[BUFFERSIZE];
 	if (username.compare(login_username) != 0) {
-		message = toLower(message); // Make it a lowercase string so we can work with it.
+		// We'll make a lowercase version so we can work with it without worrying about cases.
+		std::string lowermsg = toLower(message); // Assign message to lowermsg to make a copy.
 		int alen = 0;
 		// Someone has requested P3NG0s attention.
 		// We'll accept some variations.
-		if ((alen = vstrcontains(message, messages->getMessages("attention"))) > 0) {
+		if ((alen = vstrcontains(lowermsg, messages->getMessages("attention"))) > 0) {
 			// Strip out the attention. We got it.
-			message = message.substr(alen+1, message.length());
-			if (handleCommand(msgout, username, message)) {
+			if (handleCommand(msgout, username, message.substr(alen+1, message.length()))) {
 				printf("info: processed command\n");
-			} else if (handlePhrase(msgout, username, message)) {
+			} else if (handlePhrase(msgout, username, lowermsg.substr(alen+1, lowermsg.length()))) {
 				printf("info: processed phrase\n");
 			}
 			sendChatMessage(sock, std::string(msgout));
-		} else if (message == "ping") {
+		} else if (lowermsg == "ping") {
 			sprintf(msgout, mainConf->getValue("pong_msg", "Pong!").c_str());
 			sendChatMessage(sock, std::string(msgout));
+		} else if (lowermsg.find("http") != std::string::npos) {
+			int pos;
+			if ((pos = lowermsg.find("http://")) != std::string::npos || (pos = lowermsg.find("https://")) != std::string::npos) {
+				std::string url = message.substr(pos, message.substr(pos, message.length()).find(" "));
+				if (debug) printf("debug: getting title for url \"%s\"\n", url.c_str());
+				if(CURL* curl = curl_easy_init()) {
+					std::string httpContents;
+
+					curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+					curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
+					curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+					curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1);
+					curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.c_str());
+					curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
+					curl_easy_setopt(curl, CURLOPT_WRITEDATA, &httpContents);
+
+					CURLcode res = curl_easy_perform(curl);
+					if(res != CURLE_OK) fprintf(stderr, "Error<cURL>: curl_easy_perform() failed > %s\n", curl_easy_strerror(res));
+					curl_easy_cleanup(curl);
+					if (httpContents.length() > 0 && httpContents.find("<title>") != std::string::npos) {
+						std::string linktitle = httpContents.substr(httpContents.find("<title>")+7, httpContents.length());
+						linktitle = decodeHTML(filter(filth->getLines(), linktitle.substr(0, linktitle.find("<"))));
+						if (linktitle.length() > 0) {
+							if (linktitle.length() > 180) linktitle = linktitle.substr(0, 180)+"...";
+							if (debug) printf("debug: got title \"%s\"\n", linktitle.c_str());
+							sprintf(msgout, mainConf->getValue("link_msg", "[%s] Link: %s").c_str(), username.c_str(), linktitle.c_str());
+							sendChatMessage(sock, std::string(msgout));
+						}
+					}
+				}
+			}
 		}
 	}
 }
@@ -711,3 +740,4 @@ void qsend(int *sock, unsigned char str[], bool queue) {
 	if (queue) bufferQueue.push_back(*qp);
 	else qp->flush(0);
 }
+

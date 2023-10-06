@@ -11,11 +11,13 @@ bool debug = false;
 std::random_device rd;
 std::mt19937 rng(rd());
 
+const std::string user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36";
 std::string confFile = "conf/bot.conf";
 ACFile* mainConf;
 ACFile* worldlist;
 ACFile* replylist;
 AMFile* messages;
+ALFile* filth;
 
 #define BUFFERSIZE 65535
 

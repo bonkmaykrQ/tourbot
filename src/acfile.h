@@ -16,7 +16,7 @@ public:
 	}
 	ACFile(const char* path) {
 		std::ifstream infile(path);
-		
+		printf("info: reading file %s\n", path);
 		std::string line;
 		while (std::getline(infile, line)) {
 			if (line.length() == 0) continue;
@@ -30,9 +30,6 @@ public:
 	}
 	
 	std::map<std::string, std::string> get() {
-		for (auto const& c : this->conf) {
-			printf("info: (%s),(%s)\n", c.first.c_str(), c.second.c_str());
-		}
 		return this->conf;
 	}
 	
@@ -76,7 +73,7 @@ public:
 		this->rng = std::mt19937(rd());
 		
 		std::ifstream infile(path);
-		
+		printf("info: reading file %s\n", path);
 		std::string line; std::string group;
 		while (std::getline(infile, line)) {
 			if (line.length() == 0) continue;
@@ -111,6 +108,33 @@ private:
 	std::map<std::string, std::vector<std::string>> messages;
 	std::random_device rd;
 	std::mt19937 rng;
+};
+
+// Another List File
+class ALFile {
+public:
+	ALFile() {};
+	ALFile(const ALFile &other) {
+		this->list = other.list;
+	}
+	ALFile(const char* path) {
+		std::ifstream infile(path);
+		printf("info: reading file %s\n", path);
+		std::string line;
+		while (std::getline(infile, line)) {
+			if (line.length() == 0) continue;
+			// Check if line is a group defining line.
+			if (line.rfind("#", 0) != 0) {
+				list.push_back(line);
+			}
+		}
+	}
+	
+	std::vector<std::string> getLines() {
+		return list;
+	}
+private:
+	std::vector<std::string> list;
 };
 
 #endif

@@ -9,6 +9,11 @@
 #include <iterator>
 #include <algorithm>
 
+static size_t CurlWriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
+    ((std::string*)userp)->append((char*)contents, size * nmemb);
+    return size * nmemb;
+}
+
 template <typename Out>
 void split(const std::string &s, char delim, Out result) {
     std::istringstream iss(s);
@@ -24,6 +29,17 @@ std::vector<std::string> split(const std::string &s, char delim) {
     return elems;
 }
 
+bool strcontains(std::string needle, std::string haystack);
+bool vfind(std::vector<std::string> v, std::string i);
+int vstrcontains(std::string needle, std::vector<std::string> haystack);
+std::string filter(std::vector<std::string> filterlist, std::string input);
+std::string getValueOfIncludedName(std::map<std::string, std::string> list, std::string input);
+std::string strcombine(std::vector<std::string> args, int start, int end, char pad);
+static char* toLower(char* str);
+static std::string toLower(std::string str);
+static char* trim(char *str);
+
+
 bool strcontains(std::string needle, std::string haystack) {
 	bool found = haystack.find(needle) != std::string::npos;
 	return found;
@@ -38,6 +54,43 @@ int vstrcontains(std::string needle, std::vector<std::string> haystack) {
 		if (needle.rfind(str, 0) == 0) return str.length();
 	}
 	return 0;
+}
+
+std::string replaceAll(std::string input, std::string find, std::string replacement) {
+	int pos;
+	while ((pos = input.find(find)) != std::string::npos) {
+		input = input.replace(pos, find.length(), replacement);
+	}
+	return input;
+}
+
+std::string filter(std::vector<std::string> filterlist, std::string input) {
+	for (std::string str : filterlist) {
+		int pos;
+		while ((pos = toLower(input).find(toLower(str))) != std::string::npos) {
+			std::string replacement;
+			for (int i = 0; i < str.length(); i++) replacement+="*";
+			input = input.replace(pos, str.length(), replacement);
+		}
+	}
+	return input;
+}
+
+std::string decodeHTML(std::string in) {
+	int pos;
+	while ((pos = in.find("&#")) != std::string::npos) {
+		try {
+			char c = std::stoi(in.substr(pos+2, in.length()));
+			int endpos = in.substr(pos, in.length()).find(";");
+			if (endpos == std::string::npos) continue;
+			in = in.replace(pos, endpos+1, std::string(1, c));
+		} catch (...) { };
+	}
+	// We should be good to try and parse named encodes.
+	in = replaceAll(in, "&amp;", "&");
+	in = replaceAll(in, "&lt;", "<");
+	in = replaceAll(in, "&gt;", ">");
+	return in;
 }
 
 std::string getValueOfIncludedName(std::map<std::string, std::string> list, std::string input) {
