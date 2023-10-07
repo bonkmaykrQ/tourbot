@@ -5,23 +5,17 @@
 class Drone {
 public:
 	bool droneActive = false;
-	char* name = new char[24];
+	std::string name;
 	
 	Drone() {  };
-	Drone(char* &_name) : name{ _name } { };
-	bool operator != (Drone &d) { return strcmp(this->name, d.name) != 0; };
+	Drone(char* &_name) {
+		this->name = std::string(_name);
+	};
+	Drone(std::string &_name) {
+		this->name = _name;
+	};
+	bool operator != (Drone &d) { return this->name != d.name; };
 	Drone operator = (Drone *d) { return *d; };
-	void setGroup(Group* newGroup) {
-		activeGroup = newGroup;
-	}
-	Group* getCurrentGroup() {
-		return activeGroup;
-	}
-	bool inGroup() {
-		return activeGroup != nullptr;
-	}
-private:
-	Group* activeGroup;
 };
 
 #endif

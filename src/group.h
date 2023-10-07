@@ -2,32 +2,36 @@
 #define GROUP_H
 #include <vector>
 #include <map>
+#include "drone.h"
+#include "client.h"
 
 class Group {
 public:
+	std::vector<std::string> members;
+	
 	Group() {};
 	Group(const Group &other) {
-		this->owner = other.owner;
 		this->members = other.members;
 	}
-	Group(std::string owner) {
-		this->owner = owner;
+	
+	bool addMember(std::string user) {
+		if (std::find(members.begin(), members.end(), user) == members.end()) {
+			members.push_back(user);
+			return true;
+		}
+		return false;
 	}
 	
-	void addMember(std::string name) {
-		members.push_back(name);
+	bool delMember(std::string user) {
+		std::vector<std::string>::iterator p = std::find(members.begin(), members.end(), user);
+		if (p != members.end()) {
+			members.erase(p);
+			if (members.size() == 0) delete this;
+			return true;
+		}
+		return false;
 	}
-	
-	void delMember(std::string name) {
-		members.erase(std::find(members.begin(), members.end(), name));
-	}
-private:
-	std::string owner;
-	std::vector<std::string> members;
 };
-
-std::vector<Group> groups;
-std::map<std::string, Group*> groupmap;
 
 #endif
 

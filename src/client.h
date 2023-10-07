@@ -5,6 +5,7 @@
 #include <fstream>
 #include <stdlib.h>
 #include "drone.h"
+#include "group.h"
 #include "acfile.h"
 
 bool debug = false;
@@ -19,7 +20,8 @@ ACFile* replylist;
 AMFile* messages;
 ALFile* filth;
 
-#define BUFFERSIZE 65535
+#define BUFFERSIZE 4096
+#define MAXGROUPS 64
 
 bool autoOnline = false;
 bool roomOnline = false;
@@ -60,7 +62,8 @@ uint16_t direction = 0;
 uint16_t spin = 0;
 
 std::map<char, char*> properties;
-std::map<char, Drone> objects;
+std::map<char, Drone*> objects;
+std::vector<Group> groups;
 
 void loadConfig();
 int deinit(int response);
@@ -78,14 +81,24 @@ void setAvatar(int *sock, std::string avstr);
 void roomIDReq(int *sock, std::string room);
 void teleport(int *sock, int x, int y, int z, int rot);
 void longloc(int *sock, int x, int y, int z, int rot);
+void setBuddy(int* sock, std::string name, bool status);
 void userEnter(char id);
 void userExit(char id);
+Group* findGroupOfMember(std::string name);
 bool handleCommand(char* buffer, std::string from, std::string message);
 bool handlePhrase(char* buffer, std::string from, std::string message);
 void processText(int *sock, std::string username, std::string message);
 void processWhisper(int *sock, std::string username, std::string message);
 void sendChatMessage(int *sock, std::string msg);
 void sendWhisperMessage(int *sock, std::string to, std::string msg);
+void relayGroupMessage(Group* g, int *sock, std::string from, std::string text);
+void sendGroupMessage(Group* g, int *sock, std::string message);
 void qsend(int *sock, unsigned char str[], bool queue);
+
+Drone* getDrone(std::string name) {
+	for (auto o : objects)
+		if (o.second->name == name) return o.second;
+	return nullptr;
+}
 
 #endif

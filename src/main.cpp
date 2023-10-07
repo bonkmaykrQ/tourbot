@@ -28,7 +28,6 @@
 #include "verrors.h"
 #include "cmds.h"
 #include "props.h"
-#include "group.h"
 #include "utils.h"
 
 class QueuedPacket {
@@ -66,7 +65,7 @@ int main(int argc, char const* argv[]) {
 	autoInit();
 	while (autoOnline) {
 		while (!roomOnline) {}
-		sleep(1);
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
 		if (bufferQueue.size() > 0) {
 			if (debug) printf("debug: flushing buffer queue (%i packets)\n", bufferQueue.size());
 			for (QueuedPacket qp : bufferQueue) {
@@ -235,7 +234,8 @@ void reciever(int *sock, uint16_t port) {
 			offs+=long_len;
 			shortID = bufin[offs++];
 			if (longID != NULL || strlen(longID) > 0) {
-				Drone newDrone = *(new Drone(longID));
+				std::string longstr = std::string(longID);
+				Drone* newDrone = new Drone(longstr);
 				objects[shortID] = newDrone;
 			}
 		} else if (bufin[p+2] == CMD_SESSEXIT && bufin[p+1] == 0x01) {
@@ -315,6 +315,24 @@ void reciever(int *sock, uint16_t port) {
 					userExit(objID);
 				} else {
 					userEnter(objID);
+				}
+			}
+		} else if (bufin[p+2] == CMD_BUDDYNTF && bufin[p+1] == 0x01) {
+			char* username = new char[32];
+			int offs = p+3;
+			int username_len = bufin[offs++];
+			memcpy(username, &bufin[offs], username_len);
+			username[username_len] = 0;
+			offs+=username_len;
+			bool status = (bufin[offs++] == 1);
+			if (!status) {
+				std::string userstr = std::string(username);
+				Group* budGroup = findGroupOfMember(toLower(userstr));
+				if (budGroup != nullptr) {
+					char *whisout = new char[255];
+					sprintf(whisout, mainConf->getValue("leftgrp_msg", "%s has left the group.").c_str(), userstr.c_str());
+					sendGroupMessage(budGroup, sock, whisout);
+					budGroup->delMember(toLower(userstr));
 				}
 			}
 		} else {
@@ -507,16 +525,36 @@ void longloc(int *sock, int x, int y, int z, int rot) {
 	qsend(sock, buftp, true);
 }
 
+void setBuddy(int* sock, std::string name, bool status) {
+	unsigned char bufout[255] = {0};
+	int k = 0;
+	bufout[k++] = name.length()+5;
+	bufout[k++] = 0x01;
+	bufout[k++] = CMD_BUDDYUPD;
+	bufout[k++] = name.length();
+	for(int l = 0; l < name.length(); l++)
+		bufout[k++] = name[l];
+	bufout[k++] = status?1:0;
+	bufout[k] = 0;
+	qsend(sock, bufout, true);
+}
+
 void userEnter(char id) {
-	if (!((Drone)objects[id]).droneActive) {
-		objects[id].droneActive = true;
+	if (!objects[id]->droneActive) {
+		objects[id]->droneActive = true;
 	}
 }
 
 void userExit(char id) {
-	if (((Drone)objects[id]).droneActive) {
+	if (objects[id]->droneActive) {
 		objects.erase((char)id);
 	}
+}
+
+Group* findGroupOfMember(std::string name) {
+	for (int i = 0; i < groups.size(); i++)
+		if (std::find(groups[i].members.begin(), groups[i].members.end(), name) != groups[i].members.end()) return &groups[i];
+	return nullptr;
 }
 
 bool handleCommand(char* buffer, std::string from, std::string message) {
@@ -577,6 +615,63 @@ bool handleCommand(char* buffer, std::string from, std::string message) {
 		} else if ((args[0] == "shutdown" || args[0] == "kill") && from == mainConf->getValue("owner", "")) {
 			exit(deinit(0));
 			return true;
+		}
+	}
+	return false;
+}
+
+bool handleGroups(char* buffer, std::string from, std::string message) {
+	std::vector<std::string> args = split(message, ' ');
+	if (args.size() > 1 && args[0] == "group") {
+		if (args[1] == "help") {
+			sprintf(buffer, "'create' to start a group, 'add ?' to add a user, 'leave' to leave, 'stats' to get a member list.");
+			return true;
+		}
+		Group* activeGroup = findGroupOfMember(from);
+		if (activeGroup == nullptr) {
+			if (args[1] == "create") {
+				Group* newGroup = new Group();
+				newGroup->addMember(from);
+				setBuddy(&roomsock, from, true);
+				groups.push_back(*newGroup);
+				sprintf(buffer, mainConf->getValue("newgrp_msg", "A new group has been created.").c_str());
+				return true;
+			} else if (args[1] == "leave" || args[1] == "invite") {
+				sprintf(buffer, mainConf->getValue("nogrp_msg", "You are not in a group.").c_str());
+				return true;
+			}
+		} else {
+			if (args[1] == "create") {
+				sprintf(buffer, mainConf->getValue("ingrp_msg", "You are already in a group.").c_str());
+				return true;
+			} else if (args[1] == "leave") {
+				char *whisout = new char[255];
+				sprintf(whisout, mainConf->getValue("leftgrp_msg", "%s has left the group.").c_str(), from.c_str());
+				sendGroupMessage(activeGroup, &roomsock, whisout);
+				activeGroup->delMember(from);
+				sprintf(buffer, mainConf->getValue("exitgrp_msg", "You have left the group.").c_str());
+				setBuddy(&roomsock, from, false);
+				return true;
+			} else if (args[1] == "add" && args.size() > 2) {
+				std::string newmem = toLower(args[2]);
+				if (findGroupOfMember(newmem) == nullptr) {
+					activeGroup->addMember(newmem);
+					char *whisout = new char[255];
+					sprintf(whisout, mainConf->getValue("leftgrp_msg", "%s added you to the group.").c_str(), from.c_str());
+					sendWhisperMessage(&roomsock, newmem, whisout);
+					sprintf(buffer, mainConf->getValue("invitegrp_msg", "%s was added to the group by %s.").c_str(), args[2].c_str(), from.c_str());
+					setBuddy(&roomsock, newmem, true);
+				} else {
+					sprintf(buffer, mainConf->getValue("noinvitegrp_msg", "User is already in a group.").c_str());
+				}
+				return true;
+			} else if (args[1] == "stats") {
+				std::string statmsg = "Users in group: ";
+				for (std::vector<std::string>::iterator v = activeGroup->members.begin(); v != activeGroup->members.end(); ++v)
+					statmsg+=((v!=activeGroup->members.begin()?", ":"")+*v);
+				sprintf(buffer, statmsg.c_str());
+				return true;
+			}
 		}
 	}
 	return false;
@@ -667,18 +762,23 @@ void processText(int *sock, std::string username, std::string message) {
 
 void processWhisper(int *sock, std::string username, std::string message) {
 	if (debug) printf("debug: received whisper from %s: \"%s\"\n", username.c_str(), message.c_str());
-	char *msgout = new char[255];
-	message = toLower(message);
+	std::string lowermsg = toLower(message);
+	char *msgout = new char[BUFFERSIZE];
 	
-	if (message == "ping") {
+	if (lowermsg == "ping") {
 		sendWhisperMessage(sock, username, mainConf->getValue("pong_msg", "Pong!"));
 	} else {
-		if (handleCommand(msgout, username, message)) {
+		if (false) {//handleGroups(msgout, toLower(username), lowermsg)) { // until an anti-spam exception is made
+			printf("info: processed group\n");
+		} else if (handleCommand(msgout, username, message)) {
 			printf("info: processed command\n");
-		} else if (handlePhrase(msgout, username, message)) {
-			printf("info: processed phrase\n");
 		} else {
-			snprintf(msgout, 255, messages->getMessage("unknown").c_str());
+			Group* actG = findGroupOfMember(toLower(username));
+			if (actG != nullptr) {
+				relayGroupMessage(actG, sock, username, message);
+			} else {
+				sprintf(msgout, messages->getMessage("unknown").c_str());
+			}
 		}
 		sendWhisperMessage(sock, username, msgout);
 	}
@@ -727,17 +827,28 @@ void sendWhisperMessage(int *sock, std::string to, std::string msg) {
 				msgout[k++] = line[l];
 			msgout[k] = 0;
 			msgout[0] = k;
-			if(debug) printf("debug: sending whisper \"%s\"\n", line.c_str());
+			if(debug) printf("debug: sending whisper to '%s' \"%s\"\n", to.c_str(), line.c_str());
 			qsend(sock, *(&msgout), true);
 			memset(&msgout[0], 0, sizeof(msgout));
 		}
 	}
 }
 
+void relayGroupMessage(Group* g, int *sock, std::string from, std::string text) {
+	for (std::string member : g->members)
+		if (member != toLower(from)) sendWhisperMessage(sock, member, from+"> "+text);
+}
+
+void sendGroupMessage(Group* g, int *sock, std::string message) {
+	for (std::string member : g->members)
+		sendWhisperMessage(sock, member, message);
+}
+
 void qsend(int *sock, unsigned char str[], bool queue) {
 	if (debug) printf("debug: queuing packet type %i with length %i.\n", str[2], str[0]);
 	QueuedPacket* qp = new QueuedPacket(sock, str);
 	if (queue) bufferQueue.push_back(*qp);
-	else qp->flush(0);
+	else 
+		qp->flush(0);
 }
 
