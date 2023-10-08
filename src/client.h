@@ -12,6 +12,12 @@ bool debug = false;
 std::random_device rd;
 std::mt19937 rng(rd());
 
+const std::vector<std::string> blacklist = {
+	"worldsmaster",
+	"trade",
+	"worlds"
+};
+
 const std::string user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36";
 std::string confFile = "conf/bot.conf";
 ACFile* mainConf;
@@ -71,7 +77,7 @@ void autoInit();
 void roomInit();
 void roomKeepAlive();
 void autoRandMessage();
-void reciever(int *sock, uint16_t port);
+void reciever(int *sock, uint16_t port, bool* status);
 void sessInit(int *sock, std::string username, std::string password);
 void sessExit(int *sock);
 void constructPropertyList(int type, std::map<int, char*> props, unsigned char* snd);
@@ -93,6 +99,7 @@ void sendChatMessage(int *sock, std::string msg);
 void sendWhisperMessage(int *sock, std::string to, std::string msg);
 void relayGroupMessage(Group* g, int *sock, std::string from, std::string text);
 void sendGroupMessage(Group* g, int *sock, std::string message);
+void safeDeleteGroupMember(Group* g, std::string member);
 void qsend(int *sock, unsigned char str[], bool queue);
 
 Drone* getDrone(std::string name) {

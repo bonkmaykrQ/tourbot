@@ -26,7 +26,6 @@ public:
 		std::vector<std::string>::iterator p = std::find(members.begin(), members.end(), user);
 		if (p != members.end()) {
 			members.erase(p);
-			if (members.size() == 0) delete this;
 			return true;
 		}
 		return false;

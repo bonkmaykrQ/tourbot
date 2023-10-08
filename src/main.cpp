@@ -63,9 +63,9 @@ int main(int argc, char const* argv[]) {
 		printf("info: (%s),(%s)\n", c.first.c_str(), c.second.c_str());
 	}*/
 	autoInit();
-	while (autoOnline) {
-		while (!roomOnline) {}
-		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+	while (autoOnline || roomOnline) {
+		while (!roomOnline) {} // We require the room but get disconnected from auto after awhile
+		std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 		if (bufferQueue.size() > 0) {
 			if (debug) printf("debug: flushing buffer queue (%i packets)\n", bufferQueue.size());
 			for (QueuedPacket qp : bufferQueue) {
@@ -124,7 +124,7 @@ void autoInit() {
 	if (connect(autosock, (struct sockaddr*)&auto_addr, sizeof(auto_addr)) < 0)
 		perror("AutoServ connection failed");
 	
-	aRecv_t = std::thread(reciever, &autosock, autoport);
+	aRecv_t = std::thread(reciever, &autosock, autoport, &autoOnline);
 	send(autosock, new unsigned char[] {0x03, 0xff, CMD_PROPREQ}, 3, 0);
 	printf("info: Connected to AutoServer: %i.%i.%i.%i:%i\n", autoserver[1], autoserver[1], autoserver[2], autoserver[3], autoport);
 	sessInit(&autosock, login_username, login_password);
@@ -146,7 +146,7 @@ void roomInit() {
 	send(autosock, new unsigned char[] {0x03, 0xff, CMD_PROPREQ}, 3, 0);
 	printf("info: Connected to RoomServer: %i.%i.%i.%i:%i\n", roomserver[1], roomserver[1], roomserver[2], roomserver[3], roomport);
 	roomOnline = true;
-	rRecv_t = std::thread(reciever, &roomsock, roomport);
+	rRecv_t = std::thread(reciever, &roomsock, roomport, &roomOnline);
 	sessInit(&roomsock, login_username, login_password);
 	sleep(1);
 	rKeepAlive_t = std::thread(roomKeepAlive);
@@ -187,7 +187,7 @@ void autoRandMessage() {
 	printf("warning: room auto-messenger disconnected! Ignore if minRandomMsgTime is 0.\n");
 }
 
-void reciever(int *sock, uint16_t port) {
+void reciever(int *sock, uint16_t port, bool* status) {
 	unsigned char bufin[BUFFERSIZE] = {};
 	while (read(*sock, bufin, sizeof(bufin)) > 0) {
 		int p = 0;
@@ -239,8 +239,7 @@ void reciever(int *sock, uint16_t port) {
 				objects[shortID] = newDrone;
 			}
 		} else if (bufin[p+2] == CMD_SESSEXIT && bufin[p+1] == 0x01) {
-			autoOnline = roomOnline = false;
-			deinit(0);
+			break;
 		} else if (bufin[p+2] == CMD_SESSINIT && bufin[p+1] == 0x01) {
 			std::map<char, char*> props = readOldPropertyList(&bufin[p]);
 			int errNo = VAR_OK;
@@ -332,7 +331,7 @@ void reciever(int *sock, uint16_t port) {
 					char *whisout = new char[255];
 					sprintf(whisout, mainConf->getValue("leftgrp_msg", "%s has left the group.").c_str(), userstr.c_str());
 					sendGroupMessage(budGroup, sock, whisout);
-					budGroup->delMember(toLower(userstr));
+					safeDeleteGroupMember(budGroup, toLower(userstr));
 				}
 			}
 		} else {
@@ -344,6 +343,7 @@ void reciever(int *sock, uint16_t port) {
 		}
 		memset(&bufin[0], 0, sizeof(bufin));
 	}
+	*status = false;
 }
 
 void sessInit(int *sock, std::string username, std::string password) {
@@ -551,9 +551,16 @@ void userExit(char id) {
 	}
 }
 
+bool isBlacklisted(std::string name) {
+	return std::find(blacklist.begin(), blacklist.end(), name) != blacklist.end();
+}
+
 Group* findGroupOfMember(std::string name) {
 	for (int i = 0; i < groups.size(); i++)
-		if (std::find(groups[i].members.begin(), groups[i].members.end(), name) != groups[i].members.end()) return &groups[i];
+		if (std::find(groups[i].members.begin(), groups[i].members.end(), name) != groups[i].members.end()) {
+			if (debug) printf("debug: %s is in group %p\n", name.c_str(), &groups[i]);
+			return &groups[i];
+		}
 	return nullptr;
 }
 
@@ -648,7 +655,7 @@ bool handleGroups(char* buffer, std::string from, std::string message) {
 				char *whisout = new char[255];
 				sprintf(whisout, mainConf->getValue("leftgrp_msg", "%s has left the group.").c_str(), from.c_str());
 				sendGroupMessage(activeGroup, &roomsock, whisout);
-				activeGroup->delMember(from);
+				safeDeleteGroupMember(activeGroup, from);
 				sprintf(buffer, mainConf->getValue("exitgrp_msg", "You have left the group.").c_str());
 				setBuddy(&roomsock, from, false);
 				return true;
@@ -707,52 +714,51 @@ bool handlePhrase(char* buffer, std::string from, std::string message) {
 
 void processText(int *sock, std::string username, std::string message) {
 	if (debug) printf("debug: received text from %s: \"%s\"\n", username.c_str(), message.c_str());
+	if (isBlacklisted(toLower(username)) || username.compare(login_username) != 0) return;
 	char *msgout = new char[BUFFERSIZE];
-	if (username.compare(login_username) != 0) {
-		// We'll make a lowercase version so we can work with it without worrying about cases.
-		std::string lowermsg = toLower(message); // Assign message to lowermsg to make a copy.
-		int alen = 0;
-		// Someone has requested P3NG0s attention.
-		// We'll accept some variations.
-		if ((alen = vstrcontains(lowermsg, messages->getMessages("attention"))) > 0) {
-			// Strip out the attention. We got it.
-			if (handleCommand(msgout, username, message.substr(alen+1, message.length()))) {
-				printf("info: processed command\n");
-			} else if (handlePhrase(msgout, username, lowermsg.substr(alen+1, lowermsg.length()))) {
-				printf("info: processed phrase\n");
-			}
-			sendChatMessage(sock, std::string(msgout));
-		} else if (lowermsg == "ping") {
-			sprintf(msgout, mainConf->getValue("pong_msg", "Pong!").c_str());
-			sendChatMessage(sock, std::string(msgout));
-		} else if (lowermsg.find("http") != std::string::npos) {
-			int pos;
-			if ((pos = lowermsg.find("http://")) != std::string::npos || (pos = lowermsg.find("https://")) != std::string::npos) {
-				std::string url = message.substr(pos, message.substr(pos, message.length()).find(" "));
-				if (debug) printf("debug: getting title for url \"%s\"\n", url.c_str());
-				if(CURL* curl = curl_easy_init()) {
-					std::string httpContents;
+	// We'll make a lowercase version so we can work with it without worrying about cases.
+	std::string lowermsg = toLower(message); // Assign message to lowermsg to make a copy.
+	int alen = 0;
+	// Someone has requested P3NG0s attention.
+	// We'll accept some variations.
+	if ((alen = vstrcontains(lowermsg, messages->getMessages("attention"))) > 0) {
+		// Strip out the attention. We got it.
+		if (handleCommand(msgout, username, message.substr(alen+1, message.length()))) {
+			printf("info: processed command\n");
+		} else if (handlePhrase(msgout, username, lowermsg.substr(alen+1, lowermsg.length()))) {
+			printf("info: processed phrase\n");
+		}
+		sendChatMessage(sock, std::string(msgout));
+	} else if (lowermsg == "ping") {
+		sprintf(msgout, mainConf->getValue("pong_msg", "Pong!").c_str());
+		sendChatMessage(sock, std::string(msgout));
+	} else if (lowermsg.find("http") != std::string::npos) {
+		int pos;
+		if ((pos = lowermsg.find("http://")) != std::string::npos || (pos = lowermsg.find("https://")) != std::string::npos) {
+			std::string url = message.substr(pos, message.substr(pos, message.length()).find(" "));
+			if (debug) printf("debug: getting title for url \"%s\"\n", url.c_str());
+			if(CURL* curl = curl_easy_init()) {
+				std::string httpContents;
 
-					curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-					curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
-					curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-					curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1);
-					curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.c_str());
-					curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
-					curl_easy_setopt(curl, CURLOPT_WRITEDATA, &httpContents);
+				curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+				curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
+				curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+				curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1);
+				curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.c_str());
+				curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
+				curl_easy_setopt(curl, CURLOPT_WRITEDATA, &httpContents);
 
-					CURLcode res = curl_easy_perform(curl);
-					if(res != CURLE_OK) fprintf(stderr, "Error<cURL>: curl_easy_perform() failed > %s\n", curl_easy_strerror(res));
-					curl_easy_cleanup(curl);
-					if (httpContents.length() > 0 && httpContents.find("<title>") != std::string::npos) {
-						std::string linktitle = httpContents.substr(httpContents.find("<title>")+7, httpContents.length());
-						linktitle = decodeHTML(filter(filth->getLines(), linktitle.substr(0, linktitle.find("<"))));
-						if (linktitle.length() > 0) {
-							if (linktitle.length() > 180) linktitle = linktitle.substr(0, 180)+"...";
-							if (debug) printf("debug: got title \"%s\"\n", linktitle.c_str());
-							sprintf(msgout, mainConf->getValue("link_msg", "[%s] Link: %s").c_str(), username.c_str(), linktitle.c_str());
-							sendChatMessage(sock, std::string(msgout));
-						}
+				CURLcode res = curl_easy_perform(curl);
+				if(res != CURLE_OK) fprintf(stderr, "Error<cURL>: curl_easy_perform() failed > %s\n", curl_easy_strerror(res));
+				curl_easy_cleanup(curl);
+				if (httpContents.length() > 0 && httpContents.find("<title>") != std::string::npos) {
+					std::string linktitle = httpContents.substr(httpContents.find("<title>")+7, httpContents.length());
+					linktitle = decodeHTML(filter(filth->getLines(), linktitle.substr(0, linktitle.find("<"))));
+					if (linktitle.length() > 0) {
+						if (linktitle.length() > 180) linktitle = linktitle.substr(0, 180)+"...";
+						if (debug) printf("debug: got title \"%s\"\n", linktitle.c_str());
+						sprintf(msgout, mainConf->getValue("link_msg", "[%s] Link: %s").c_str(), username.c_str(), linktitle.c_str());
+						sendChatMessage(sock, std::string(msgout));
 					}
 				}
 			}
@@ -762,13 +768,14 @@ void processText(int *sock, std::string username, std::string message) {
 
 void processWhisper(int *sock, std::string username, std::string message) {
 	if (debug) printf("debug: received whisper from %s: \"%s\"\n", username.c_str(), message.c_str());
+	if (isBlacklisted(toLower(username))) return;
 	std::string lowermsg = toLower(message);
 	char *msgout = new char[BUFFERSIZE];
 	
 	if (lowermsg == "ping") {
 		sendWhisperMessage(sock, username, mainConf->getValue("pong_msg", "Pong!"));
 	} else {
-		if (false) {//handleGroups(msgout, toLower(username), lowermsg)) { // until an anti-spam exception is made
+		if (handleGroups(msgout, toLower(username), lowermsg)) { // until an anti-spam exception is made
 			printf("info: processed group\n");
 		} else if (handleCommand(msgout, username, message)) {
 			printf("info: processed command\n");
@@ -810,6 +817,7 @@ void sendChatMessage(int *sock, std::string msg) {
 }
 
 void sendWhisperMessage(int *sock, std::string to, std::string msg) {
+	if (isBlacklisted(toLower(to))) return;
 	if (msg.length() > 0 && to.length() > 0) {
 		unsigned char msgout[255] = {0};
 		for (size_t i = 0; i < msg.size(); i += 226) {
@@ -842,6 +850,19 @@ void relayGroupMessage(Group* g, int *sock, std::string from, std::string text) 
 void sendGroupMessage(Group* g, int *sock, std::string message) {
 	for (std::string member : g->members)
 		sendWhisperMessage(sock, member, message);
+}
+
+void safeDeleteGroupMember(Group* g, std::string member) {
+	if (g->delMember(member)) {
+		if (g->members.size() == 0) {
+			if (debug) printf("debug: deleting empty group %p.\n", g);
+			for (int i = 0; i < groups.size(); i++)
+				if (&groups[i] == g) {
+					groups.erase(groups.begin() + i);
+					break;
+				}
+		}
+	}
 }
 
 void qsend(int *sock, unsigned char str[], bool queue) {
