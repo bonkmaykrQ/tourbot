@@ -65,7 +65,7 @@ int main(int argc, char const* argv[]) {
 	autoInit();
 	while (autoOnline || roomOnline) {
 		while (!roomOnline) {} // We require the room but get disconnected from auto after awhile
-		std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 		if (bufferQueue.size() > 0) {
 			if (debug) printf("debug: flushing buffer queue (%i packets)\n", bufferQueue.size());
 			for (QueuedPacket qp : bufferQueue) {
