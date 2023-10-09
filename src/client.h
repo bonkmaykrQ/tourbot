@@ -7,6 +7,7 @@
 #include "drone.h"
 #include "group.h"
 #include "acfile.h"
+#define BUFFERSIZE 4096
 
 bool debug = false;
 std::random_device rd;
@@ -25,9 +26,7 @@ ACFile* worldlist;
 ACFile* replylist;
 AMFile* messages;
 ALFile* filth;
-
-#define BUFFERSIZE 4096
-#define MAXGROUPS 64
+ALFile* nogroup;
 
 bool autoOnline = false;
 bool roomOnline = false;

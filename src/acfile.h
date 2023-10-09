@@ -58,6 +58,15 @@ public:
 	void setInt(std::string name, int value) {
 		conf[name] = std::to_string(value);
 	}
+	
+	void write(const char* path) {
+		std::ofstream outfile(path);
+		printf("info: writing to file %s\n", path);
+		for (std::map<std::string, std::string>::iterator it = conf.begin(); it != conf.end(); ++it) {
+			outfile << it->first << "=" << it->second << std::endl;
+		}
+		outfile.close();
+	}
 private:
 	std::map<std::string, std::string> conf;
 };
@@ -104,6 +113,18 @@ public:
 		if (messages.find(group) == messages.end()) return {};
 		return messages[group];
 	}
+	
+	void write(const char* path) {
+		std::ofstream outfile(path);
+		printf("info: writing to file %s\n", path);
+		for (std::map<std::string, std::vector<std::string>>::iterator mi = messages.begin(); mi != messages.end(); ++mi) {
+			outfile << "[" << mi->first << "]" << std::endl;
+			for (auto vi = mi->second.begin(); vi < mi->second.end(); mi++) {
+				outfile << *vi << std::endl;
+			}
+		}
+		outfile.close();
+	}
 private:
 	std::map<std::string, std::vector<std::string>> messages;
 	std::random_device rd;
@@ -132,6 +153,26 @@ public:
 	
 	std::vector<std::string> getLines() {
 		return list;
+	}
+	
+	void addLine(std::string entry) {
+		list.push_back(entry);
+	}
+	
+	void delLine(std::string entry) {
+		std::vector<std::string>::iterator p = std::find(list.begin(), list.end(), entry);
+		if (p != list.end()) {
+			list.erase(p);
+		};
+	}
+	
+	void write(const char* path) {
+		std::ofstream outfile(path);
+		printf("info: writing to file %s\n", path);
+		for (std::string value : list) {
+			outfile << value << std::endl;
+		}
+		outfile.close();
 	}
 private:
 	std::vector<std::string> list;

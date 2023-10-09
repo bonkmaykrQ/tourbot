@@ -85,6 +85,7 @@ void loadConfig() {
 	replylist = new ACFile(mainConf->getValue("replyfile", "conf/replies.conf").c_str());
 	messages = new AMFile(mainConf->getValue("messages", "conf/messages.list").c_str());
 	filth = new ALFile(mainConf->getValue("filthlist", "conf/filth.list").c_str());
+	nogroup = new ALFile(mainConf->getValue("groupblocklist", "conf/nogroup.list").c_str());
 	login_username = mainConf->getValue("username", "");
 	login_password = mainConf->getValue("password", "");
 	room = mainConf->getValue("room", "GroundZero#Reception<dimension-1>");
@@ -555,6 +556,11 @@ bool isBlacklisted(std::string name) {
 	return std::find(blacklist.begin(), blacklist.end(), name) != blacklist.end();
 }
 
+bool canGroup(std::string name) {
+	std::vector<std::string> list = nogroup->getLines();
+	return std::find(list.begin(), list.end(), name) == list.end();
+}
+
 Group* findGroupOfMember(std::string name) {
 	for (int i = 0; i < groups.size(); i++)
 		if (std::find(groups[i].members.begin(), groups[i].members.end(), name) != groups[i].members.end()) {
@@ -646,6 +652,16 @@ bool handleGroups(char* buffer, std::string from, std::string message) {
 			} else if (args[1] == "leave" || args[1] == "invite") {
 				sprintf(buffer, mainConf->getValue("nogrp_msg", "You are not in a group.").c_str());
 				return true;
+			} else if (args[1] == "on" && !canGroup(toLower(from))) {
+				nogroup->delLine(toLower(from));
+				nogroup->write(mainConf->getValue("groupblocklist", "conf/nogroup.list").c_str());
+				sprintf(buffer, mainConf->getValue("grpon_msg", "Your groups are now enabled.").c_str());
+				return true;
+			} else if (args[1] == "off" && canGroup(toLower(from))) {
+				nogroup->addLine(toLower(from));
+				nogroup->write(mainConf->getValue("groupblocklist", "conf/nogroup.list").c_str());
+				sprintf(buffer, mainConf->getValue("grpoff_msg", "Your groups are now disabled.").c_str());
+				return true;
 			}
 		} else {
 			if (args[1] == "create") {
@@ -661,7 +677,7 @@ bool handleGroups(char* buffer, std::string from, std::string message) {
 				return true;
 			} else if (args[1] == "add" && args.size() > 2) {
 				std::string newmem = toLower(args[2]);
-				if (findGroupOfMember(newmem) == nullptr) {
+				if (findGroupOfMember(newmem) == nullptr & canGroup(newmem)) {
 					activeGroup->addMember(newmem);
 					char *whisout = new char[255];
 					sprintf(whisout, mainConf->getValue("leftgrp_msg", "%s added you to the group.").c_str(), from.c_str());
@@ -713,7 +729,7 @@ bool handlePhrase(char* buffer, std::string from, std::string message) {
 }
 
 void processText(int *sock, std::string username, std::string message) {
-	if (debug) printf("debug: received text from %s: \"%s\"\n", username.c_str(), message.c_str());
+	printf("info: received text from %s: \"%s\"\n", username.c_str(), message.c_str());
 	if (isBlacklisted(toLower(username)) || username.compare(login_username) != 0) return;
 	char *msgout = new char[BUFFERSIZE];
 	// We'll make a lowercase version so we can work with it without worrying about cases.
@@ -722,11 +738,15 @@ void processText(int *sock, std::string username, std::string message) {
 	// Someone has requested P3NG0s attention.
 	// We'll accept some variations.
 	if ((alen = vstrcontains(lowermsg, messages->getMessages("attention"))) > 0) {
-		// Strip out the attention. We got it.
-		if (handleCommand(msgout, username, message.substr(alen+1, message.length()))) {
-			printf("info: processed command\n");
-		} else if (handlePhrase(msgout, username, lowermsg.substr(alen+1, lowermsg.length()))) {
-			printf("info: processed phrase\n");
+		if (message.length() > alen+1) {
+			// Strip out the attention. We got it.
+			if (handleCommand(msgout, username, message.substr(alen+1, message.length()))) {
+				printf("info: processed command\n");
+			} else if (handlePhrase(msgout, username, lowermsg.substr(alen+1, lowermsg.length()))) {
+				printf("info: processed phrase\n");
+			}
+		} else {
+			sprintf(msgout, messages->getMessage("greets").c_str(), username.c_str());
 		}
 		sendChatMessage(sock, std::string(msgout));
 	} else if (lowermsg == "ping") {
@@ -767,7 +787,7 @@ void processText(int *sock, std::string username, std::string message) {
 }
 
 void processWhisper(int *sock, std::string username, std::string message) {
-	if (debug) printf("debug: received whisper from %s: \"%s\"\n", username.c_str(), message.c_str());
+	printf("info: received whisper from %s: \"%s\"\n", username.c_str(), message.c_str());
 	if (isBlacklisted(toLower(username))) return;
 	std::string lowermsg = toLower(message);
 	char *msgout = new char[BUFFERSIZE];
@@ -783,8 +803,6 @@ void processWhisper(int *sock, std::string username, std::string message) {
 			Group* actG = findGroupOfMember(toLower(username));
 			if (actG != nullptr) {
 				relayGroupMessage(actG, sock, username, message);
-			} else {
-				sprintf(msgout, messages->getMessage("unknown").c_str());
 			}
 		}
 		sendWhisperMessage(sock, username, msgout);
@@ -806,7 +824,7 @@ void sendChatMessage(int *sock, std::string msg) {
 				msgout[k++] = line[l];
 			msgout[k] = 0;
 			msgout[0] = k;
-			if(debug) printf("debug: sending text \"%s\"\n", line.c_str());
+			printf("info: sending text: \"%s\"\n", line.c_str());
 			unsigned char bufmsg[255];
 			for(int l = 0; l < sizeof(msgout); l++)
 				bufmsg[l] = msgout[l];
@@ -835,7 +853,7 @@ void sendWhisperMessage(int *sock, std::string to, std::string msg) {
 				msgout[k++] = line[l];
 			msgout[k] = 0;
 			msgout[0] = k;
-			if(debug) printf("debug: sending whisper to '%s' \"%s\"\n", to.c_str(), line.c_str());
+			printf("info: sending whisper to '%s': \"%s\"\n", to.c_str(), line.c_str());
 			qsend(sock, *(&msgout), true);
 			memset(&msgout[0], 0, sizeof(msgout));
 		}
