@@ -730,7 +730,7 @@ bool handlePhrase(char* buffer, std::string from, std::string message) {
 
 void processText(int *sock, std::string username, std::string message) {
 	printf("info: received text from %s: \"%s\"\n", username.c_str(), message.c_str());
-	if (isBlacklisted(toLower(username)) || username.compare(login_username) != 0) return;
+	if (isBlacklisted(toLower(username)) || username.compare(login_username) == 0) return;
 	char *msgout = new char[BUFFERSIZE];
 	// We'll make a lowercase version so we can work with it without worrying about cases.
 	std::string lowermsg = toLower(message); // Assign message to lowermsg to make a copy.
@@ -738,14 +738,18 @@ void processText(int *sock, std::string username, std::string message) {
 	// Someone has requested P3NG0s attention.
 	// We'll accept some variations.
 	if ((alen = vstrcontains(lowermsg, messages->getMessages("attention"))) > 0) {
-		if (message.length() > alen+1) {
+		printf("info: attention has been called.\n");
+		if (message.length() > alen) {
 			// Strip out the attention. We got it.
 			if (handleCommand(msgout, username, message.substr(alen+1, message.length()))) {
 				printf("info: processed command\n");
 			} else if (handlePhrase(msgout, username, lowermsg.substr(alen+1, lowermsg.length()))) {
 				printf("info: processed phrase\n");
+			} else {
+				printf("info: no response found!\n");
 			}
 		} else {
+			printf("info: generating generic response.\n");
 			sprintf(msgout, messages->getMessage("greets").c_str(), username.c_str());
 		}
 		sendChatMessage(sock, std::string(msgout));
