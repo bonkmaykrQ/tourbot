@@ -637,7 +637,7 @@ bool handleGroups(char* buffer, std::string from, std::string message) {
 	std::vector<std::string> args = split(message, ' ');
 	if (args.size() > 1 && args[0] == "group") {
 		if (args[1] == "help") {
-			sprintf(buffer, "'create' to start a group, 'add ?' to add a user, 'leave' to leave, 'stats' to get a member list.");
+			sprintf(buffer, "'on'/'off' to toggle group support, 'create' to start a group, 'add ?' to add a user, 'leave' to leave, 'stats' to get a member list.");
 			return true;
 		}
 		Group* activeGroup = findGroupOfMember(from);
