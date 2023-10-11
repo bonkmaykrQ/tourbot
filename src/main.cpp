@@ -21,6 +21,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include <nlohmann/json.hpp>
+
 #define CURL_STATICLIB
 #include <curl/curl.h>
 
@@ -210,7 +212,7 @@ void reciever(int *sock, uint16_t port, bool* status) {
 			int message_len = bufin[offs++];
 			memcpy(message, &bufin[offs++], message_len);
 			message[message_len] = 0;
-			processText(sock, std::string(username), std::string(message));
+			try { processText(sock, std::string(username), std::string(message)); } catch (...) { };
 		} else if (bufin[p+2] == CMD_WHISPER && bufin[p+1] == 0x01) {
 			char *username = new char[32];
 			char *message = new char[250];
@@ -224,7 +226,7 @@ void reciever(int *sock, uint16_t port, bool* status) {
 			int message_len = bufin[offs++];
 			memcpy(message, &bufin[offs++], message_len);
 			message[message_len] = 0;
-			processWhisper(sock, std::string(username), std::string(message));
+			try { processWhisper(sock, std::string(username), std::string(message)); } catch (...) { };
 		} else if (bufin[p+2] == CMD_REGOBJID && bufin[p+1] == 0xff) {
 			char *longID = new char[32];
 			int shortID;
@@ -591,14 +593,6 @@ bool handleCommand(char* buffer, std::string from, std::string message) {
 			for (int d = 0; d < dice; d++) roll+=rno(rng);
 			sprintf(buffer, mainConf->getValue("roll_msg", "%s rolled a %i.").c_str(), from.c_str(), roll);
 			return true;
-		} else if ((args[0] == "where" || args[0] == "whereis") && args.size() > 1) {
-			std::string mark = getValueOfIncludedName(worldlist->get(), strcombine(args, 1, args.size(), ' '));
-			if (mark.length() > 0) {
-				sprintf(buffer, messages->getMessage("world").c_str(), mark.c_str());
-			} else {
-				sprintf(buffer, mainConf->getValue("world_not_found_msg", "Sorry, I don't know that one.").c_str());
-			}
-			return true;
 		} else if (args[0] == "help") {
 			char *whisout = new char[255];
 			sprintf(whisout, mainConf->getValue("help_msg", "You can find more information here: %s").c_str(), mainConf->getValue("help_url", "").c_str());
@@ -619,6 +613,67 @@ bool handleCommand(char* buffer, std::string from, std::string message) {
 			return true;
 		} else if (args[0] == "stats" || args[0] == "status") {
 			sprintf(buffer, mainConf->getValue("roomusers_msg", "There are %i users in this room.").c_str(), objects.size());
+			return true;
+		} else if (args[0] == "translate") {
+			std::string source = "auto"; // Automatically
+			std::string target = "en"; // Assume target is English if not specified
+			if (args.size() > 2) {
+				try {
+					int spos = args[1].find(">");
+					if (spos != args[1].npos) {
+						if (spos > 0) source = args[1].substr(0, spos);
+						if (spos < args[1].length()) target = args[1].substr(spos+1, args[1].length());
+					}
+				} catch (...) { }
+				nlohmann::json input = {
+					{"q", strcombine(args, 2, args.size(), ' ')},
+					{"source", source},
+					{"target", target},
+				};
+				std::string newmsg;
+				if (debug) printf("debug: attempting to translate from %s to %s: \"%s\"\n", source.c_str(), target.c_str(), strcombine(args, 2, args.size(), ' ').c_str());
+				curl_global_init(CURL_GLOBAL_ALL);
+				if(CURL* curl = curl_easy_init()) {
+					std::string postData = input.dump();
+					std::string httpContents;
+					long httpCode;
+
+					struct curl_slist *list = NULL;
+					list = curl_slist_append(list, "Content-Type: application/json");
+
+					
+					curl_easy_setopt(curl, CURLOPT_URL, (mainConf->getValue("translator", "http://localhost;5010/")+"translate").c_str());
+					curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
+					curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+					curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1);
+					curl_easy_setopt(curl, CURLOPT_POST, 1L);
+					curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
+					curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.c_str());
+					curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
+					curl_easy_setopt(curl, CURLOPT_WRITEDATA, &httpContents);
+					curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
+
+					CURLcode res = curl_easy_perform(curl);
+					curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+					if (debug) printf("debug: translator recieved: %i \"%s\"\n", httpCode, httpContents.c_str());
+					if(res != CURLE_OK) {
+						fprintf(stderr, "Error<cURL>: curl_easy_perform() failed > %s\n", curl_easy_strerror(res));
+						sprintf(buffer, "I cannot translate that.");
+					} else {
+						nlohmann::json output = nlohmann::json::parse(httpContents);
+						std::string fromLang = source;
+						if (fromLang == "auto") {
+							fromLang = output["detectedLanguage"]["language"];
+						}
+						newmsg = output["translatedText"];
+						sprintf(buffer, "[%s] %s->%s: %s", from.c_str(), fromLang.c_str(), target.c_str(), filter(filth->getLines(), newmsg).c_str());
+					}
+					curl_easy_cleanup(curl);
+					curl_slist_free_all(list);
+				}
+			} else {
+				sprintf(buffer, "I cannot process those arguments. Use the command like this: 'translate src>trg message'");
+			}
 			return true;
 		} else if (args[0] == "reload" && from == mainConf->getValue("owner", "")) {
 			loadConfig();
@@ -703,27 +758,27 @@ bool handleGroups(char* buffer, std::string from, std::string message) {
 bool handlePhrase(char* buffer, std::string from, std::string message) {
 	std::vector<std::string> args = split(message, ' ');
 	if (strcontains("flip a coin", message)) {
-		
 		std::uniform_int_distribution<int> rno(0,1);
 		bool heads = rno(rng) == 1;
 		sprintf(buffer, mainConf->getValue("coinflip_msg", "%s flipped %s.").c_str(), from.c_str(), heads?"heads":"tails");
 		return true;
-		
 	} else if ((strcontains("joke", message) && strcontains("tell", message)) || (strcontains("make", message) && strcontains("laugh", message))) {
-		
 		sprintf(buffer, messages->getMessage("jokes").c_str());
 		return true;
-		
 	} else if ((strcontains("what", message) || strcontains("who", message)) && strcontains("are you", message)) {
-		
 		sprintf(buffer, messages->getMessage("whoami").c_str());
 		return true;
-		
 	} else if (vfind(args, "hi") || vfind(args, "hello") || vfind(args, "hey") || vfind(args, "yo")) {
-		
 		sprintf(buffer, messages->getMessage("greets").c_str(), from.c_str());
 		return true;
-		
+	} else if (strcontains("where", message)) {
+		std::string mark = getValueOfIncludedName(worldlist->get(), message);
+		if (mark.length() > 0) {
+			sprintf(buffer, messages->getMessage("world").c_str(), mark.c_str());
+		} else {
+			sprintf(buffer, mainConf->getValue("world_not_found_msg", "Sorry, I don't know that one.").c_str());
+		}
+		return true;
 	}
 	return false;
 }
