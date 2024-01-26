@@ -129,7 +129,7 @@ void autoInit() {
 	
 	aRecv_t = std::thread(reciever, &autosock, autoport, &autoOnline);
 	send(autosock, new unsigned char[] {0x03, 0xff, CMD_PROPREQ}, 3, 0);
-	printf("info: Connected to AutoServer: %i.%i.%i.%i:%i\n", autoserver[1], autoserver[1], autoserver[2], autoserver[3], autoport);
+	printf("info: Connected to AutoServer: %i.%i.%i.%i:%i\n", autoserver[0], autoserver[1], autoserver[2], autoserver[3], autoport);
 	sessInit(&autosock, login_username, login_password);
 	autoOnline = true;
 }
@@ -147,7 +147,7 @@ void roomInit() {
 		perror("RoomServ connection failed");
 	
 	send(autosock, new unsigned char[] {0x03, 0xff, CMD_PROPREQ}, 3, 0);
-	printf("info: Connected to RoomServer: %i.%i.%i.%i:%i\n", roomserver[1], roomserver[1], roomserver[2], roomserver[3], roomport);
+	printf("info: Connected to RoomServer: %i.%i.%i.%i:%i\n", roomserver[0], roomserver[1], roomserver[2], roomserver[3], roomport);
 	roomOnline = true;
 	rRecv_t = std::thread(reciever, &roomsock, roomport, &roomOnline);
 	sessInit(&roomsock, login_username, login_password);
