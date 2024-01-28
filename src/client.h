@@ -9,7 +9,7 @@
 #include "acfile.h"
 #define BUFFERSIZE 4096
 
-bool debug = false;
+bool debug = true;
 std::random_device rd;
 std::mt19937 rng(rd());
 
@@ -23,6 +23,7 @@ const std::string user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.
 std::string confFile = "conf/bot.conf";
 ACFile* mainConf;
 ACFile* worldlist;
+ACFile* marksLUT;
 ACFile* replylist;
 AMFile* messages;
 ALFile* filth;
@@ -49,7 +50,7 @@ uint16_t roomport = 5672;
 
 std::string login_username;
 std::string login_password;
-std::string avatar = "avatar:pengo.mov";
+std::string avatar = "http://files.worlio.com/users/bonkmaykr/avatarsforme/gabu1s*4h*4v*.mov";
 
 // Needs to include dimension too
 std::string room;
@@ -57,7 +58,7 @@ uint16_t roomID = 1;
 
 int protocol = 24;
 char* version = "1000000000";
-int avatars = 253;
+int avatars = 253; // avoid culling users if possible... what could go wrong?
 int keepAliveTime;
 
 uint16_t xPos = 0;
@@ -69,6 +70,30 @@ uint16_t spin = 0;
 std::map<char, char*> properties;
 std::map<char, Drone*> objects;
 std::vector<Group> groups;
+
+namespace internalTypes {
+	struct dronePositionI {
+		int x;
+		int y;
+		int z;
+		int yaw;
+	};
+
+	struct dronePositionF {
+		float x;
+		float y;
+		float z;
+		float yaw;
+	};
+
+	struct markEntry {
+		std::string name;
+		std::string url;
+		std::string room;
+		dronePositionI position;
+		bool blacklist;
+	};
+}
 
 void loadConfig();
 int deinit(int response);
@@ -100,6 +125,10 @@ void relayGroupMessage(Group* g, int *sock, std::string from, std::string text);
 void sendGroupMessage(Group* g, int *sock, std::string message);
 void safeDeleteGroupMember(Group* g, std::string member);
 void qsend(int *sock, unsigned char str[], bool queue);
+
+void handleTeleportRequest(internalTypes::markEntry details);
+void handleTour(std::string destination[4]);
+void lookUpWorldName(std::string alias, char* buffer);
 
 Drone* getDrone(std::string name) {
 	for (auto o : objects)

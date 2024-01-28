@@ -11,6 +11,7 @@
 #include <sstream>
 #include <algorithm>
 #include <ctime>
+//#include <vector>
 #include <ctype.h>
 #include <stdlib.h>
 #include <time.h>
@@ -22,6 +23,7 @@
 #include <fcntl.h>
 
 #include <nlohmann/json.hpp>
+using json = nlohmann::json;
 
 #define CURL_STATICLIB
 #include <curl/curl.h>
@@ -31,6 +33,13 @@
 #include "cmds.h"
 #include "props.h"
 #include "utils.h"
+
+// Global variables used to prevent things from derailing
+bool onTour = false;
+std::string tourQueue[4];
+std::string realLocation;
+json worldsmarks;
+
 
 class QueuedPacket {
 public:
@@ -61,9 +70,10 @@ int main(int argc, char const* argv[]) {
 		printf("info: primary conf file set to \"%s\"\n", confFile.c_str());
 	}
 	loadConfig();
-	/*for (auto const& c : mainConf->get()) {
-		printf("info: (%s),(%s)\n", c.first.c_str(), c.second.c_str());
-	}*/
+	
+	// initialize teleportation ability
+	realLocation = mainConf->getValue("world", "http://jett.dacii.net/jett/Recreated%20Worlds/SummersGZ/groundzero%20summers.world");
+
 	autoInit();
 	while (autoOnline || roomOnline) {
 		while (!roomOnline) {} // We require the room but get disconnected from auto after awhile
@@ -84,6 +94,7 @@ int main(int argc, char const* argv[]) {
 void loadConfig() {
 	mainConf = new ACFile(confFile.c_str());
 	worldlist = new ACFile(mainConf->getValue("worldfile", "conf/worldlist.conf").c_str());
+	marksLUT = new ACFile(mainConf->getValue("lutfile", "conf/lut.conf").c_str());
 	replylist = new ACFile(mainConf->getValue("replyfile", "conf/replies.conf").c_str());
 	messages = new AMFile(mainConf->getValue("messages", "conf/messages.list").c_str());
 	filth = new ALFile(mainConf->getValue("filthlist", "conf/filth.list").c_str());
@@ -99,6 +110,23 @@ void loadConfig() {
 	spin = mainConf->getInt("spin", 0);
 	keepAliveTime = mainConf->getInt("katime", 15);
 	debug = mainConf->getInt("debug", 0) == 1;
+
+	// parse json routine
+	// 
+	// data structure per entry is as follows:
+	// name (friendly name used during tours)
+	// url (the file location)
+	// room (the chatroom ID for the roomserver)
+	// position (an array containing the bot's resting position for that world while on tour)
+	//		position is an array with a length of 4, containing X, Y, Z, and yaw in that order.
+	// blacklist (bool which skips the world during diceroll tours)
+	//		useful for preventing GZ reskins from appearing, exceptions made where appropriate
+	//		blacklisted worlds still need a specified idle position!
+	// 
+	// feature idea: commentary/notes keyvalue pair which the bot will speak when entering a certain world, used to give tips ??
+
+	std::ifstream dictionaryStream("conf/marks.json"); // look for worldsmarks database in the configuration folder and open it
+	worldsmarks = json::parse(dictionaryStream); // parse and remember data globally
 }
 
 int deinit(int response) {
@@ -172,8 +200,8 @@ void roomKeepAlive() {
 void autoRandMessage() {
 	int minTime = mainConf->getInt("minRandomMsgTime", 0);
 	int maxTime = mainConf->getInt("maxRandomMsgTime", 0);
-	int wait = 0;
-	sendChatMessage(&roomsock, messages->getMessage("startup"));
+	int wait = 600;
+	//sendChatMessage(&roomsock, messages->getMessage("startup"));
 	if (minTime != 0) {
 		while (roomOnline) {
 			if (wait != 0) {
@@ -349,11 +377,15 @@ void reciever(int *sock, uint16_t port, bool* status) {
 	*status = false;
 }
 
+// this only works correctly if using POSIX-compliant line endings in the bot.conf file
+// CR+LF breaks everything, should probably fix this if this becomes widely used at any point!
 void sessInit(int *sock, std::string username, std::string password) {
 	bufout[1] = 0x01;
 	bufout[2] = CMD_SESSINIT;
-	int l = 3;
+	int l = 3; // packet construction buffer
 	
+	std::cout << "Logging in with screenname " + username + "\n"; //debug
+
 	// Username
 	bufout[l++] = 2;
 	bufout[l++] = username.length();
@@ -395,6 +427,7 @@ void sessInit(int *sock, std::string username, std::string password) {
 	
 	bufout[0] = l;
 	bufout[l+1] = 0;
+
 	qsend(sock, bufout, false);
 }
 
@@ -755,6 +788,39 @@ bool handleGroups(char* buffer, std::string from, std::string message) {
 	return false;
 }
 
+// unimplemented
+void handleTeleportRequest(internalTypes::markEntry details) {
+
+}
+
+// unimplemented
+void handleTour(std::string destination[4]) {
+
+}
+
+// avoid redundant CTRL + V code in handlePhrase()
+void lookUpWorldName(std::string alias, char* buffer/*replies*/) {
+	auto key = worldsmarks.find(alias);
+	if (key != worldsmarks.end()) {
+		std::cout << "info: found world \"" + alias + "\", teleporting.";
+		internalTypes::markEntry details;
+		details.name = (*key)["name"].get<std::string>();
+		details.url = (*key)["url"].get<std::string>();
+		details.room = (*key)["room"].get<std::string>();
+
+		details.position.x = (*key)["position"][0];
+		details.position.y = (*key)["position"][1];
+		details.position.z = (*key)["position"][2];
+		details.position.yaw = (*key)["position"][3];
+
+		handleTeleportRequest(details);
+	}
+	else {
+		std::cout << "ERROR: no world with the name \"" + alias + "\" exists! aborting teleport request\n";
+		sprintf(buffer, mainConf->getValue("world_not_found_msg", "Sorry, I don't know that one.").c_str());
+	}
+}
+
 bool handlePhrase(char* buffer, std::string from, std::string message) {
 	std::vector<std::string> args = split(message, ' ');
 	if (strcontains("flip a coin", message)) {
@@ -778,6 +844,31 @@ bool handlePhrase(char* buffer, std::string from, std::string message) {
 		} else {
 			sprintf(buffer, mainConf->getValue("world_not_found_msg", "Sorry, I don't know that one.").c_str());
 		}
+		return true;
+	}
+
+	// in the interest of making things easier programmatically
+	// i want to generate LUTs to map phrases to the JSON
+	// which will allow aliases for each entry in the db
+	// 
+	// having an admin command like "makelut" to instantly generate these
+	// by recursively scanning the marks file would be nice
+	else if (strcontains("take me to", message)) {
+		std::cout << "info: remote user requested teleportation!\n";
+		// lookup LUT first for aliases and then check JSON for key
+		// using worldsmarks.find(message) if no alias present
+		// spit back error if both are blank
+
+		std::string alias = getValueOfIncludedName(marksLUT->get(), message);
+		if (alias.length() > 0) {
+			std::cout << "info: found world with alias \"" + message + "\" in lookup table.\n";
+			lookUpWorldName(alias, buffer);
+		}
+		else { // we didn't find an alias, search the DB directly
+			std::cout << "info: no world with the alias \"" + message + "\" is in the lookup table.\n";
+			lookUpWorldName(message, buffer);
+		}
+
 		return true;
 	}
 	return false;
@@ -811,6 +902,7 @@ void processText(int *sock, std::string username, std::string message) {
 	} else if (lowermsg == "ping") {
 		sprintf(msgout, mainConf->getValue("pong_msg", "Pong!").c_str());
 		sendChatMessage(sock, std::string(msgout));
+	} else if (lowermsg.find("http") != std::string::npos) {
 	} else if (lowermsg.find("http") != std::string::npos) {
 		int pos;
 		if ((pos = lowermsg.find("http://")) != std::string::npos || (pos = lowermsg.find("https://")) != std::string::npos) {
@@ -865,6 +957,24 @@ void processWhisper(int *sock, std::string username, std::string message) {
 			}
 		}
 		sendWhisperMessage(sock, username, msgout);
+	}
+
+	// needs to process geolocation requests and respond with a file path for valid teleporting
+	if (lowermsg == "&|+where?") {
+		// intentionally omit bot location if we're touring so players always start at world start
+		// the bot should ideally be placed in the same starting room, within the player's view as soon as they spawn
+		// 
+		// doing it this way requires that we handle bookmark room IDs separately from the destination URL
+		if (onTour == true) {
+			std::cout << "info: touring, sending truncated location\n";
+			sendWhisperMessage(sock, username, "&|+where>" + realLocation + "#" + room);
+		}
+		else {
+			// are all these concats really fucking neccessary?
+			std::cout << "info: not touring, sending full location\n";
+			sendWhisperMessage(sock, username, "&|+where>" + realLocation + "#" + room
+				+ "@" + std::to_string(xPos) + "," + std::to_string(yPos) + "," + std::to_string(zPos));
+		}
 	}
 }
 
