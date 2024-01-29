@@ -15,10 +15,15 @@ Underlined tasks are tasks currently being worked on
     - [ ] <ins>Teleport-on-request routine</ins>
     - [ ] Basic Tour Guide routine
     - [ ] Tour communication (prioritize leader commands, whispering users out of range, etc)
+    - [ ] Ability to join another user's ongoing tour
 - [ ] Database Building
 - [ ] Spanish Localization
 - [ ] Tour Guide Avatar
+    - [ ] Contextual Avatars: on tour
+    - [ ] Contextual Avatars: idle (advertising)
 - [ ] Help Pages, Website, and Documentation
+- [ ] Tourbot Status Page
+- [ ] New User Recognition and Welcome
 
 # Runtime Requirements
 - An active internet connection
