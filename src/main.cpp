@@ -781,6 +781,9 @@ bool handleGroups(char* buffer, std::string from, std::string message) {
 
 // teleport using a markEntry loaded from the database
 void handleTeleportRequest(internalTypes::markEntry details) {
+	std::cout << "info: delaying teleport by 1000ms to avoid race condition\n";
+	sleep(1);
+
 	std::cout << "info: requesting to join room \"" + details.room + "\"\n";
 	roomIDReq(&roomsock, details.room);
 
@@ -830,6 +833,7 @@ void lookUpWorldName(std::string alias, char* buffer/*replies*/) {
 			typeid((*key)["position"][2]).name() != "int" ||
 			typeid((*key)["position"][3]).name() != "int") {
 			std::cout << "ERROR: expected type int when reading position. PLEASE CHECK your marks.json!!!\n";
+			std::cout << typeid((*key)["position"][0]).name();
 		}
 
 		details.name = (*key)["name"].get<std::string>();
