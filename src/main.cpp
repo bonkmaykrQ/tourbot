@@ -781,17 +781,17 @@ bool handleGroups(char* buffer, std::string from, std::string message) {
 
 // teleport using a markEntry loaded from the database
 void handleTeleportRequest(internalTypes::markEntry details) {
-	std::cout << "info: requesting to join room \"" + details.room + "\"";
+	std::cout << "info: requesting to join room \"" + details.room + "\"\n";
 	roomIDReq(&roomsock, details.room);
 
-	std::cout << "info: updating goto destination";
+	std::cout << "info: updating goto destination\n";
 	realLocation = details.url;
 
 	std::cout << "info: setting position at " +
 		std::to_string(details.position.x) + ", " +
 		std::to_string(details.position.y) + ", " +
 		std::to_string(details.position.z) + ", " +
-		std::to_string(details.position.yaw);
+		std::to_string(details.position.yaw) + "\n";
 	teleport(&roomsock, 
 		details.position.x, 
 		details.position.y, 
@@ -816,7 +816,7 @@ void lookUpWorldName(std::string alias, char* buffer/*replies*/) {
 		std::cout << "info: found world \"" + alias + "\" in database, commencing teleport.\n";
 
 		internalTypes::markEntry details;
-		json failsafe = {
+		json failsafe = { // leftovers
 			{"name", "FALLBACK"},
 			{"url", "rel:GroundZero/GroundZero.world"},
 			{"room", "GroundZero#Reception"},
@@ -824,27 +824,22 @@ void lookUpWorldName(std::string alias, char* buffer/*replies*/) {
 			{"blacklist", true}
 		};
 
+		if (
+			typeid((*key)["position"][0]).name() != "int" ||
+			typeid((*key)["position"][1]).name() != "int" ||
+			typeid((*key)["position"][2]).name() != "int" ||
+			typeid((*key)["position"][3]).name() != "int") {
+			std::cout << "ERROR: expected type int when reading position. PLEASE CHECK your marks.json!!!\n";
+		}
 
-		//details.name = worldsmarks.value(alias, failsafe).value("name", "null");
-		//details.url = worldsmarks.value(alias, failsafe).value("url", "null");
-		//details.room = worldsmarks.value(alias, failsafe).value("room", "null");
-		//details.position.x = worldsmarks.value(alias, failsafe).value("position", "null")[0];
-		//details.position.y = worldsmarks.value(alias, failsafe).value("position", "null")[1];
-		//details.position.z = worldsmarks.value(alias, failsafe).value("position", "null")[2];
-		//details.position.yaw = worldsmarks.value(alias, failsafe).value("position", "null")[3];
-
-
-		
 		details.name = (*key)["name"].get<std::string>();
 		details.url = (*key)["url"].get<std::string>();
 		details.room = (*key)["room"].get<std::string>();
-		std::cout << "debug: retrieving position"; //found bug
 		details.position.x = (*key)["position"][0];
 		details.position.y = (*key)["position"][1];
 		details.position.z = (*key)["position"][2];
 		details.position.yaw = (*key)["position"][3];
 		
-
 		sprintf(buffer, mainConf->getValue("world_not_found_msg", "Taking you there now, teleport to me!").c_str());
 		handleTeleportRequest(details);
 	}
