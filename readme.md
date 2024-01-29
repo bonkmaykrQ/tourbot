@@ -7,11 +7,11 @@ Tourbot is an automated chatbot for the Worlds.com online 3D chat service (speci
 This project is a gift to the Worlds community, and I owe a special thanks to the endless line of nerds who came before me and reverse-engineered the chat protocol so that this could happen.
 
 # To-Do
-Bold lines are tasks currently being worked on
-- [ ] **Core Functions**
+Underlined tasks are tasks currently being worked on
+- [ ] <ins>Core Functions</ins>
     - [x] Improved configuration system
-    - [ ] **New commands**
-    - [ ] **Teleport-on-request routine**
+    - [ ] <ins>New commands</ins>
+    - [ ] <ins>Teleport-on-request routine</ins>
     - [ ] Basic Tour Guide routine
     - [ ] Tour communication (prioritize leader commands, whispering users out of range, etc)
 - [ ] Database Building
