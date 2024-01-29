@@ -832,8 +832,7 @@ void lookUpWorldName(std::string alias, char* buffer/*replies*/) {
 			typeid((*key)["position"][1]).name() != "int" ||
 			typeid((*key)["position"][2]).name() != "int" ||
 			typeid((*key)["position"][3]).name() != "int") {
-			std::cout << "ERROR: expected type int when reading position. PLEASE CHECK your marks.json!!!\n";
-			std::cout << typeid((*key)["position"][0]).name();
+			//std::cout << "ERROR: expected type int when reading position. PLEASE CHECK your marks.json!!!\n";
 		}
 
 		details.name = (*key)["name"].get<std::string>();
