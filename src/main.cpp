@@ -846,7 +846,7 @@ void lookUpWorldName(std::string alias, char* buffer/*replies*/) {
 		details.position.z = (*key)["position"][2];
 		details.position.yaw = (*key)["position"][3];
 		
-		sprintf(buffer, mainConf->getValue("world_not_found_msg", "Taking you there now, teleport to me!").c_str());
+		sprintf(buffer, mainConf->getValue("world_found_msg", "Taking you there now, teleport to me!").c_str());
 		handleTeleportRequest(details);
 	}
 	else {
