@@ -10,6 +10,7 @@ This project is a gift to the Worlds community, and I owe a special thanks to th
 Underlined tasks are tasks currently being worked on
 - [ ] <ins>Core Functions</ins>
     - [x] Improved configuration system
+    - [ ] Strip out old `worldlist.conf` entirely (pair `where` command with `lookUpWorldName()`)
     - [ ] <ins>New commands</ins>
     - [ ] <ins>Teleport-on-request routine</ins>
     - [ ] Basic Tour Guide routine
