@@ -1,14 +1,48 @@
 [startup]
-Hi, I'm P3NG0, your friendly Worlds bot.
-My initialization is complete.
+*yawn*
 [attention]
-hey pengo
-hey p3ng0
-p3ng0
-yo pengo
-yo p3ng0
-hello p3ng0
-aloha p3ng0
+hey tourbot
+hey tourbot
+tourbot
+yo tourbot
+yo tourbot
+hello tourbot
+aloha tourbot
+[requestverb]
+give me a
+give me
+give me the
+[requestnoun]
+take me to
+take me to a
+take me to the
+show me
+show me a
+show me the
+[markreminder]
+If you like this world, remember to save a Worldsmark!
+[tourtutorial]
+Make sure you have "Tourbot" added to your friends list, then click my name and select "Go There" to follow me.
+[goto]
+I'm teleporting to %s, follow me!
+[tour1]
+Okay, first stop, we are going to %s! Teleport now
+Get ready! We're on our way to %s! Teleport now
+[leavingin3]
+3 minutes left! Make sure to Worldsmark your favorite ones!
+We'll be going to the next world, %s, in 3 minutes!
+[leavingin1]
+1 minute remaining! Get ready to teleport soon!
+1 minute left! If you aren't done exploring, you should save a Worldsmark now.
+[leavingsoon]
+30 seconds, pack your bags!
+30 seconds left.
+[tour2]
+Next stop, we'll be visiting %s! Teleport now
+Get ready to go to our next stop, %s! Teleport now
+[tour3]
+Final stop, we're travelling to %s! Teleport now
+And finally, we'll be arriving at %s! Teleport now
 [greets]
 Hi.
 Hi %s.
@@ -17,23 +51,32 @@ Nice to meet you %s.
 Hope all is well!
 Howdy!
 Salutations %s.
-Acknowledged.
-Added '%s' to database.
 [goodbye]
-Goodbye!
+Later!
+*fart reverb*
 [unknown]
 Sorry, I don't know what you're asking.
 I am unsure of your request.
-ERROR: DIVISION BY ZERO
-Need something?
+Please rephrase.
 [random]
-Beep boop!
+*yawn*
+[null]
+Bored? Looking for a new place to go? Artsy? Spooky? Cozy? Say "tourbot, give me a tour"
 [jokes]
-Why did the chicken cross the road? To escape my deadly lasers, of course!
+The other day, my wife asked me to pass her lipstick, but I accidentally passed her a glue stick. She still isn’t talking to me.
+The most corrupt CEOs are those of the pretzel companies. They’re always so twisted.
+As I get older, I remember all the people I lost along the way. Maybe a career as a tour guide was not the right choice.
+My doctor said I only have 3 weeks to live, so I murdered him and the judge gave me 30 years. Problem solved!
+I have many jokes about unemployed people — sadly none of them work.
+You’re not completely useless. You can always serve as a bad example.
+My boss told me to have a good day. So I went home.
+I bought a pair of shoes from a drug dealer. I don't know what he laced them with, but I've been tripping all day.
+Teamwork is important; it helps to put the blame on someone else.
+The worst part about breaking up with a Japanese woman, is that you have to drop the bomb twice before she understands.
 [world]
 It's right here: %s
 %s
 Here is your mark: %s
 [whoami]
-Hi, I'm P3NG0. I'm a friendly bot.
-I am here to annihilate the human race.
+I am a BOT designed to help you explore! My source code is based off of P3NG0 by Wirlaburla, we share many of the same functionalities.
+I am designed to take you places! Please see https://kangworlds.net/tourbot/ for more information!

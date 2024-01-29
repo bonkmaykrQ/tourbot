@@ -1,0 +1,50 @@
+{
+  "atlantis": {
+    "name": "Atlantis",
+    "url": "http://files.worlio.com/users/aujourd/atlantis/atlantis.world",
+    "room": "atlantis#beach",
+    "position": [
+      "11544",
+      "7828",
+      "220",
+      "203"
+    ],
+    "blacklist": false
+  },
+  "beach": {
+    "name": "Jimbly's Beach",
+    "url": "http://ittraining.net/jimbly/groundzero.world",
+    "room": "Groundzero#Reception",
+    "position": [
+      "500",
+      "500",
+      "150",
+      "0"
+    ],
+    "blacklist": true
+  },
+  "mugshots": {
+    "name": "Jimbly's Mugshot Hallway",
+    "url": "http://ittraining.net/jimbly/mugshots.world",
+    "room": "Mugshots#Room0",
+    "position": [
+      "106",
+      "1804",
+      "150",
+      "140"
+    ],
+    "blacklist": true
+  },
+  "waterworld": {
+    "name": "Waterworld, aka Party Cave",
+    "url": "http://www.ittraining.net/waterworld/waterworld.world",
+    "room": "Water World#Pool",
+    "position": [
+      "672",
+      "3916",
+      "150",
+      "139"
+    ],
+    "blacklist": false
+  }
+}
