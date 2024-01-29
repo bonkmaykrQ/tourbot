@@ -823,27 +823,27 @@ void lookUpWorldName(std::string alias, char* buffer/*replies*/) {
 			{"position", {0, 0, 0, 0}},
 			{"blacklist", true}
 		};
-		std::cout << "info: found world \"" + alias + "\" in database, commencing teleport.\n";
 
-		details.name = worldsmarks.value(alias, failsafe).value("name", "null");
-		details.url = worldsmarks.value(alias, failsafe).value("url", "null");
-		details.room = worldsmarks.value(alias, failsafe).value("room", "null");
-		std::cout << "info: found world \"" + alias + "\" in database, commencing teleport.\n";
-		details.position.x = worldsmarks.value(alias, failsafe).value("position", "null")[0];
-		details.position.y = worldsmarks.value(alias, failsafe).value("position", "null")[1];
-		details.position.z = worldsmarks.value(alias, failsafe).value("position", "null")[2];
-		details.position.yaw = worldsmarks.value(alias, failsafe).value("position", "null")[3];
-		std::cout << "info: found world \"" + alias + "\" in database, commencing teleport.\n";
 
-		/*
+		//details.name = worldsmarks.value(alias, failsafe).value("name", "null");
+		//details.url = worldsmarks.value(alias, failsafe).value("url", "null");
+		//details.room = worldsmarks.value(alias, failsafe).value("room", "null");
+		//details.position.x = worldsmarks.value(alias, failsafe).value("position", "null")[0];
+		//details.position.y = worldsmarks.value(alias, failsafe).value("position", "null")[1];
+		//details.position.z = worldsmarks.value(alias, failsafe).value("position", "null")[2];
+		//details.position.yaw = worldsmarks.value(alias, failsafe).value("position", "null")[3];
+
+
+		
 		details.name = (*key)["name"].get<std::string>();
 		details.url = (*key)["url"].get<std::string>();
 		details.room = (*key)["room"].get<std::string>();
+		std::cout << "debug: retrieving position"; //found bug
 		details.position.x = (*key)["position"][0];
 		details.position.y = (*key)["position"][1];
 		details.position.z = (*key)["position"][2];
 		details.position.yaw = (*key)["position"][3];
-		*/
+		
 
 		sprintf(buffer, mainConf->getValue("world_not_found_msg", "Taking you there now, teleport to me!").c_str());
 		handleTeleportRequest(details);
