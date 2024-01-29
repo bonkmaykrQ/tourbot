@@ -34,11 +34,14 @@ using json = nlohmann::json;
 #include "props.h"
 #include "utils.h"
 
-// Global variables used to prevent things from derailing
-bool onTour = false;
-std::string tourQueue[4];
-std::string realLocation;
-json worldsmarks;
+// Global variables for tour guide
+bool onTour = false;	// whether or not we should process the tour routine
+std::string tourQueue[4]; // list of world names to teleport to
+std::string realLocation; // used to allow teleporting from users
+json worldsmarks;	// internal World database loaded from marks.json
+std::string leader = ""; // whoever requested the current tour
+int schedule = 0; // compare against system clock for timing
+int tourStep = 0; // which world we're on
 
 
 class QueuedPacket {
@@ -183,18 +186,6 @@ void roomInit() {
 	rKeepAlive_t = std::thread(roomKeepAlive);
 	sleep(1);
 	rAutoMsg_t = std::thread(autoRandMessage);
-}
-
-void roomKeepAlive() {
-	sleep(1);
-	teleport(&roomsock, xPos, yPos, zPos, direction);
-	while (roomOnline) {
-		if (direction >= 360) direction += (spin - 360);
-		else direction+=spin;
-		longloc(&roomsock, xPos, yPos, zPos, direction);
-		sleep(keepAliveTime);
-	}
-	printf("warning: room keep alive disconnected!\n");
 }
 
 void autoRandMessage() {
@@ -788,9 +779,24 @@ bool handleGroups(char* buffer, std::string from, std::string message) {
 	return false;
 }
 
-// unimplemented
+// teleport using a markEntry loaded from the database
 void handleTeleportRequest(internalTypes::markEntry details) {
+	std::cout << "info: requesting to join room \"" + details.room + "\"";
+	roomIDReq(&roomsock, details.room);
 
+	std::cout << "info: updating goto destination";
+	realLocation = details.url;
+
+	std::cout << "info: setting position at " +
+		std::to_string(details.position.x) + ", " +
+		std::to_string(details.position.y) + ", " +
+		std::to_string(details.position.z) + ", " +
+		std::to_string(details.position.yaw);
+	teleport(&roomsock, 
+		details.position.x, 
+		details.position.y, 
+		details.position.z, 
+		details.position.yaw);
 }
 
 // unimplemented
@@ -798,21 +804,26 @@ void handleTour(std::string destination[4]) {
 
 }
 
+// checks performed each heartbeat for the duration of a tour
+void tourCaretaker() {
+	
+}
+
 // avoid redundant CTRL + V code in handlePhrase()
 void lookUpWorldName(std::string alias, char* buffer/*replies*/) {
 	auto key = worldsmarks.find(alias);
 	if (key != worldsmarks.end()) {
-		std::cout << "info: found world \"" + alias + "\", teleporting.";
+		std::cout << "info: found world \"" + alias + "\" in database, commencing teleport.\n";
 		internalTypes::markEntry details;
 		details.name = (*key)["name"].get<std::string>();
 		details.url = (*key)["url"].get<std::string>();
 		details.room = (*key)["room"].get<std::string>();
-
 		details.position.x = (*key)["position"][0];
 		details.position.y = (*key)["position"][1];
 		details.position.z = (*key)["position"][2];
 		details.position.yaw = (*key)["position"][3];
 
+		sprintf(buffer, mainConf->getValue("world_not_found_msg", "Taking you there now, teleport to me!").c_str());
 		handleTeleportRequest(details);
 	}
 	else {
@@ -859,14 +870,18 @@ bool handlePhrase(char* buffer, std::string from, std::string message) {
 		// using worldsmarks.find(message) if no alias present
 		// spit back error if both are blank
 
-		std::string alias = getValueOfIncludedName(marksLUT->get(), message);
+		// truncate message to get just the name
+		std::string truncName = message.erase(message.find("take me to "), 11);
+
+		// then perform search
+		std::string alias = getValueOfIncludedName(marksLUT->get(), truncName);
 		if (alias.length() > 0) {
-			std::cout << "info: found world with alias \"" + message + "\" in lookup table.\n";
+			std::cout << "info: found world with alias \"" + truncName + "\" in lookup table.\n";
 			lookUpWorldName(alias, buffer);
 		}
 		else { // we didn't find an alias, search the DB directly
-			std::cout << "info: no world with the alias \"" + message + "\" is in the lookup table.\n";
-			lookUpWorldName(message, buffer);
+			std::cout << "info: no world with the alias \"" + truncName + "\" is in the lookup table.\n";
+			lookUpWorldName(truncName, buffer);
 		}
 
 		return true;
@@ -1060,3 +1075,22 @@ void qsend(int *sock, unsigned char str[], bool queue) {
 		qp->flush(0);
 }
 
+// heartbeat needed to prevent disconnects
+// also used to track time
+void roomKeepAlive() {
+	sleep(1);
+	teleport(&roomsock, xPos, yPos, zPos, direction);
+	while (roomOnline) {
+		// force update position to prevent a disconnect
+		if (direction >= 360) direction += (spin - 360);
+		else direction += spin;
+		longloc(&roomsock, xPos, yPos, zPos, direction);
+
+		// do routine checks and call scheduled events
+		if (onTour == true) {tourCaretaker();}
+
+		// wait until next heartbeat
+		sleep(keepAliveTime);
+	}
+	printf("warning: room keep alive disconnected!\n");
+}
