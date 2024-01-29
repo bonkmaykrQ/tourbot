@@ -786,20 +786,21 @@ void handleTeleportRequest(internalTypes::markEntry details) {
 
 	std::cout << "info: requesting to join room \"" + details.room + "\"\n";
 	//roomIDReq(&roomsock, details.room); //fatal error
-	room = details.room;
-
-	std::cout << "info: updating goto destination\n";
-	realLocation = details.url;
+	//room = details.room;
 
 	std::cout << "info: setting position at " +
 		std::to_string(details.position.x) + ", " +
 		std::to_string(details.position.y) + ", " +
 		std::to_string(details.position.z) + ", " +
 		std::to_string(details.position.yaw) + "\n";
-	xPos = details.position.x;
+	teleport(&roomsock, xPos, yPos, zPos, direction); // force positional update immediately
+	xPos = details.position.x; // remember so that the idle thread doesn't rubberband us
 	yPos = details.position.y;
 	zPos = details.position.z;
 	direction = details.position.yaw;
+
+	std::cout << "info: updating goto destination\n";
+	realLocation = details.url;
 
 	std::cout << "info: done! initiating watchdog\n";
 }
