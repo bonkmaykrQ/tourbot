@@ -1,7 +1,7 @@
 # Tourbot
 ### The Friendly Worlds Tour Guide
 ### Progress: Not finished (teleport needs work)
-![Work in Progress](https://files.worlio.com/users/bonkmaykr/http/git/embed/pngtree-work-in-progress-png-image_6173846.png)  
+![Work in Progress](https://files.worlio.com/users/bonkmaykr/http/git/embed/FaFashionAvenueStage8740underconstruction.gif)  
 Tourbot is an automated chatbot for the Worlds.com online 3D chat service (specifically WorldsPlayer from 1998 and onward). It is based off of P3NG0 by Wirlaburla, the FIRST Worlds chatbot to ever be created and operated live in public. Tourbot retains several features from P3NG0 as well as new features, with the primary selling point being to provide both new and old users an exciting and easy way to explore new worlds, without having to dig through endless archives and file servers like Worlio or jett.dacii.net. This is especially important today as several HOSTs on Worlds have departed or otherwise become inactive, leaving many of the weekly and monthly events abandoned, including tours.  
   
 This project is a gift to the Worlds community, and I owe a special thanks to the endless line of nerds who came before me and reverse-engineered the chat protocol so that this could happen.
@@ -14,9 +14,9 @@ Underlined tasks are tasks currently being worked on
     - [ ] <ins>New commands</ins>
     - [ ] <ins>Teleport-on-request routine</ins>
     - [ ] Basic Tour Guide routine
-    - [ ] Tour communication (prioritize leader commands, whispering users out of range, etc)
+    - [ ] Tour communication (tracking users, prioritize leader commands, whispering users out of range, etc)
     - [ ] Ability to join another user's ongoing tour
-- [ ] Database Building
+- [ ] World Database Building
 - [ ] Spanish Localization
 - [ ] Tour Guide Avatar
     - [ ] Contextual Avatars: on tour
@@ -26,12 +26,14 @@ Underlined tasks are tasks currently being worked on
 - [ ] New User Recognition and Welcome
 
 # Runtime Requirements
-- An active internet connection
-- A computer running Linux or any other compatible UNIX derivative
+- An active IPv4 internet connection
+- A valid Worlds.com account which you registered using the WorldsPlayer
+- Linux or any other compatible UNIX derivative
 - The latest version of glibc
     - The actual version required will depend on the version of glibc linked during compile time.  
     I compile Tourbot on Arch-based distributions which usually have the latest version.  
     If you use a distro such as Ubuntu or Debian then you may need to compile the bot yourself.
+- A working brain
 
 # Building Requirements
 - CMake
