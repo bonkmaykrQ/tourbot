@@ -37,18 +37,15 @@ Underlined tasks are tasks currently being worked on
 - CMake
 - GCC
 - C++ header/source files from Nlohmann's JSON library
-    - If you are compiling on an Arch-based Linux system then you can get these instantly by running `sudo pacman -Sy nlohmann-json`
+    - A few Linux distributions have this library available as an installable package. Please check the repo in your package manager.
     - Otherwise you just need to put the required `json.hpp` file in your include path and make sure CMake and GCC can see it.
 
 # Building
-## Arch Linux / endeavourOS
-1. Install nlohmann-json if you haven't already: `sudo pacman -Sy nlohmann-json`
-2. Enter the root directory (where `src` is) and run `cmake -S src/ -B bin/` to create the neccessary files to compile the program.
-3. Run `cmake --build bin/` to create an executable file in the bin folder.
-4. `cd` to `bin/` and run `./p3ng0`. (Your working directory needs to be the same directory where `conf/` is located.)
-
-## Other Linux systems
+## Linux, MINIX and BSD
 1. Make sure nlohmann JSON is in your INCLUDE path so your compiler can find it's headers.
+    - On Arch Linux / endeavourOS: `sudo pacman -Sy nlohmann-json`
+    - On Ubuntu / Mint / PopOS: `sudo apt-get install nlohmann-json3-dev`
+    - Other systems: Install and link the library's source files manually.
 2. Enter the root directory (where `src` is) and run `cmake -S src/ -B bin/` to create the neccessary files to compile the program.
 3. Run `cmake --build bin/` to create an executable file in the bin folder.
 4. `cd` to `bin/` and run `./p3ng0`. (Your working directory needs to be the same directory where `conf/` is located.)
@@ -60,6 +57,8 @@ Tourbot isn't designed for Windows right now. As such, I haven't set up the proj
 I don't use Mac and I never plan to support it, I can't help you.
 
 # FAQ
+## When are you going to finish this?
+To quote our lord and savior John Carmack, "It will be done when it's done." I'm the only person working on this and I have a real life (crazy I know).
 ## Can I copy your code?
 Yes, but you have to keep the GNU GPL 3 license.
 ## Where do I report bugs?
